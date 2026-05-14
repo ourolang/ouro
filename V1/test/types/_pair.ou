@@ -1,0 +1,10 @@
+# Helper module for cross-module bare-struct return test.
+struct Pair:
+    a: i32
+    b: i32
+
+    fn make(a: i32, b: i32) -> Pair:
+        return Pair { a: a, b: b }
+
+    fn sum(self) -> i32:
+        return self.a + self.b

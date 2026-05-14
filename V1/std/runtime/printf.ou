@@ -1,0 +1,123 @@
+# Libc-free `printf` — pure Ouro, variadic body.  Auto-loaded as
+# a runtime module so the symbol emits bare (`$printf`), matching
+# what the codegen's printf intrinsic dispatches to.
+#
+# Supported format specifiers (only what existing tests / examples
+# use — no width, precision, padding, or floats):
+#   %d %i  — signed integer  (read as i64)
+#   %u     — unsigned int     (read as u64)
+#   %x     — unsigned hex     (read as u64)
+#   %s     — NUL-terminated C string (`ptr[u8]`)
+#   %c     — single byte
+#   %%     — literal percent
+#
+# The optional `l` length modifier (`%ld`, `%lu`, `%lx`) is accepted
+# but ignored: every integer variadic arg is already 64-bit wide
+# per the SysV ABI promotion rule (and Ouro's default literal is
+# isize / i64 anyway).
+syscalls = import("./syscalls")
+mem = import("./mem")
+
+
+# Write the digits of `v` in `base` (decimal or hex) into `buf`,
+# MSB-first.  Returns the number of bytes written.  `buf` must
+# have at least 32 bytes — enough for any 64-bit value in either
+# base.
+fn _format_uint(buf: ptr[u8], v: u64, base: u64) -> usize:
+    if v == 0:
+        mem_store[u8](buf, 0, 48)   # '0'
+        return 1
+    # Write LSB-first into a scratch slot, then reverse into buf.
+    scratch = mem.mem_alloc(32)
+    n: var[usize] = 0
+    cur: var[u64] = v
+    while cur != 0:
+        d: u64 = cur % base
+        c: var[u8] = (d + 48) as u8           # '0' + d
+        if d >= 10:
+            c = (d + 87) as u8                # 'a' + (d - 10)
+        mem_store[u8](scratch, n, c)
+        n = n + 1
+        cur = cur / base
+    # Reverse scratch[0..n] into buf[0..n].
+    i: var[usize] = 0
+    while i < n:
+        b = mem_load[u8](scratch, n - 1 - i)
+        mem_store[u8](buf, i, b)
+        i = i + 1
+    mem.mem_free(scratch)
+    return n
+
+
+# strlen for a NUL-terminated `ptr[u8]`.
+fn _strlen(s: ptr[u8]) -> usize:
+    n: var[usize] = 0
+    while mem_load[u8](s, n) != 0:
+        n = n + 1
+    return n
+
+
+fn printf(fmt: ptr[u8], ...) -> i32:
+    ap = va_start()
+    total: var[i32] = 0
+    buf = mem.mem_alloc(32)
+    p: var[usize] = 0
+    while mem_load[u8](fmt, p) != 0:
+        c = mem_load[u8](fmt, p)
+        if c != 37:                  # '%'
+            # Literal run — find the next '%' or NUL, write the
+            # span in one syscall.
+            start = p
+            while true:
+                c2 = mem_load[u8](fmt, p)
+                if c2 == 0 or c2 == 37:
+                    break
+                p = p + 1
+            run_len = p - start
+            chunk = ((fmt as i64) + start as i64) as ptr[u8]
+            syscalls.sys_write(1, chunk, run_len)
+            total = total + (run_len as i32)
+        else:
+            p = p + 1
+            # Accept and ignore a length modifier.
+            spec: var[u8] = mem_load[u8](fmt, p)
+            if spec == 108:           # 'l'
+                p = p + 1
+                spec = mem_load[u8](fmt, p)
+            if spec == 100 or spec == 105:    # 'd' / 'i'
+                sv: var[i64] = va_arg[i64](ap)
+                if sv < 0:
+                    syscalls.sys_write(1, "-".ptr, 1)
+                    total = total + 1
+                    sv = -sv
+                n = _format_uint(buf, sv as u64, 10)
+                syscalls.sys_write(1, buf, n)
+                total = total + (n as i32)
+            elif spec == 117:                 # 'u'
+                uv: u64 = va_arg[u64](ap)
+                n = _format_uint(buf, uv, 10)
+                syscalls.sys_write(1, buf, n)
+                total = total + (n as i32)
+            elif spec == 120:                 # 'x'
+                xv: u64 = va_arg[u64](ap)
+                n = _format_uint(buf, xv, 16)
+                syscalls.sys_write(1, buf, n)
+                total = total + (n as i32)
+            elif spec == 115:                 # 's'
+                sp = va_arg[ptr[u8]](ap)
+                slen = _strlen(sp)
+                syscalls.sys_write(1, sp, slen)
+                total = total + (slen as i32)
+            elif spec == 99:                  # 'c'
+                ch: i64 = va_arg[i64](ap)
+                mem_store[u8](buf, 0, ch as u8)
+                syscalls.sys_write(1, buf, 1)
+                total = total + 1
+            elif spec == 37:                  # '%'
+                syscalls.sys_write(1, "%".ptr, 1)
+                total = total + 1
+            # Skip the spec character (already consumed by load).
+            if mem_load[u8](fmt, p) != 0:
+                p = p + 1
+    mem.mem_free(buf)
+    return total

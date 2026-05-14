@@ -1,0 +1,10 @@
+# The smallest valid Ouro program.
+#
+# `fn main()` is the entry point. The `-> i32` return type becomes the
+# process exit code. Conventionally, `0` means success.
+#
+# Run:  make run FILE=examples/01_hello.ou
+# Out:  (none — exit code 0)
+
+fn main() -> i32:
+    return 0

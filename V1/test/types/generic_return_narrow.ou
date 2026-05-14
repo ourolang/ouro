@@ -1,0 +1,41 @@
+# Generic-fn return narrowing — call sites should see the
+# specialized return type, not the type-parameter form.  Three
+# shapes exercised:
+#   - Vec[i32].get  → i32 | Null (already worked)
+#   - Vec[rc[B]].get → rc[B] | Null  (used to stay parametric)
+#   - method on the narrowed value
+vec = import("std/vec")
+
+struct B:
+    n: i32
+
+    fn make(n: i32) -> rc[B]:
+        return B { n: n }
+
+    fn val(self) -> i32:
+        return self.n
+
+fn main() -> i32:
+    # Sanity: i32 specialization.
+    vi: rc[vec.Vec[i32]] = vec.Vec[i32].new()
+    vi.push(7i32)
+    a = vi.get(0)
+    if a ?= Null:
+        return 1
+    elif a != 7i32:
+        return 2
+
+    # The hard case: rc[B] elements.  After narrowing,
+    # `r.val()` must type as a method call on rc[B], not on
+    # TypeParamTy("T").
+    vb: rc[vec.Vec[rc[B]]] = vec.Vec[rc[B]].new()
+    vb.push(B.make(11i32))
+    r = vb.get(0)
+    if r ?= Null:
+        return 3
+    elif r.val() != 11i32:
+        # r is narrowed to `rc[B]` here, so `.val()` resolves
+        # to the struct method, not an unresolved $val symbol.
+        return 4
+
+    return 0

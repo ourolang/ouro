@@ -1,0 +1,122 @@
+# Growable byte buffer.  Heap-allocated raw memory, manual length
+# tracking, doubling capacity on overflow.  Lives until `__drop__`
+# frees the buffer.
+#
+# Imported as `bytes = import("std/bytes")`.  Element reads/writes
+# go through the comptime `mem_load[T]` / `mem_store[T]` intrinsics
+# — no extern C helpers for byte-level access.  Only the raw heap
+# allocator (`mem_alloc` / `mem_free`) is still externally linked,
+# since porting it requires module-level mutable globals that v1
+# doesn't have yet.
+
+
+# Heap primitives — these are C-runtime symbols, declared here so
+# the typechecker has signatures.  Calls route to bare `$mem_*`.
+extern mem_alloc(size: usize) -> ptr[u8]
+extern mem_free(p: ptr[u8])
+
+
+# Copy `n` bytes from `src` into `dst`.  Pure-Ouro byte loop —
+# slower than libc memcpy, but Ouro doesn't yet ship a runtime
+# `memcpy` (and we don't link against libc).  Hot paths can grow
+# their own SIMD-aware variants later.
+fn copy(dst: ptr[u8], src: ptr[u8], n: usize):
+    for i in 0..n:
+        mem_store[u8](dst, i, mem_load[u8](src, i))
+
+
+struct Bytes:
+    _data: var[ptr[u8]]      # heap buffer; 0 when cap == 0
+    _len: var[usize]
+    _cap: var[usize]
+
+    # Construct an empty buffer.  No allocation until the first
+    # `push`; an `rc[Bytes]` whose `len == 0` doesn't touch the
+    # heap allocator at all.
+    fn new() -> rc[Self]:
+        return Self { _data: 0, _len: 0, _cap: 0 }
+
+    # Wrap an already-allocated `mem_alloc`'d buffer.  Takes
+    # ownership: the returned `Bytes` will `mem_free` the buffer
+    # when it drops.  Used by `std/fs` to construct a buffer with
+    # the file's contents already filled in (no per-byte push).
+    fn from_buffer(data: ptr[u8], len: usize, cap: usize) -> rc[Self]:
+        return Self { _data: data, _len: len, _cap: cap }
+
+    # Direct (unsafe) pointer accessor for callers that need to
+    # hand the buffer to a syscall or copy bytes in bulk.  The
+    # returned pointer is valid until the next mutation or drop.
+    fn data_ptr(self) -> ptr[u8]:
+        return self._data
+
+    fn len(self) -> usize:
+        return self._len
+
+    fn cap(self) -> usize:
+        return self._cap
+
+    # Append a byte.  Grows the buffer geometrically (×2, or to 8
+    # bytes on the first allocation) so amortised insertion is O(1).
+    fn push(self: ptr[var[Self]], b: u8):
+        if self._len >= self._cap:
+            new_cap: var[usize] = self._cap * 2
+            if new_cap < 8:
+                new_cap = 8
+            new_data = mem_alloc(new_cap)
+            if self._cap > 0:
+                copy(new_data, self._data, self._len)
+                mem_free(self._data)
+            self._data = new_data
+            self._cap = new_cap
+        mem_store[u8](self._data, self._len, b)
+        self._len = self._len + 1
+
+    # Append every byte of `s` (slice or borrowed `[]u8`).  Used to
+    # build diagnostic strings, error messages, and codegen output.
+    fn push_bytes(self: ptr[var[Self]], s: []u8):
+        for i in 0..s.len:
+            self.push(s[i])
+
+    # Append the ASCII decimal form of `v`.  Handles negatives.
+    fn push_int(self: ptr[var[Self]], v: i64):
+        if v < 0:
+            self.push(45u8)                  # '-'
+            self.push_uint((-v) as u64)
+            return
+        self.push_uint(v as u64)
+
+    # Append the ASCII decimal form of an unsigned value.
+    fn push_uint(self: ptr[var[Self]], v: u64):
+        if v == 0:
+            self.push(48u8)                  # '0'
+            return
+        # Write digits LSB-first into a 32-byte scratch, then reverse.
+        scratch = mem_alloc(32)
+        n: var[usize] = 0
+        cur: var[u64] = v
+        while cur != 0:
+            d: u64 = cur % 10u64
+            mem_store[u8](scratch, n, (d + 48u64) as u8)
+            n = n + 1
+            cur = cur / 10u64
+        i: var[usize] = 0
+        while i < n:
+            self.push(mem_load[u8](scratch, n - 1 - i))
+            i = i + 1
+        mem_free(scratch)
+
+    # Note: returning a `[]u8` slice by value isn't safe — the fat-
+    # pointer slot lives on the callee's stack and dies on return.
+    # Callers needing a slice should construct it in their own frame:
+    #     data = b.data_ptr()
+    #     s    = data[0..b.len()]
+
+    # Read the byte at index `i`, or `Null` if out of range.
+    fn get(self, i: usize) -> u8 | Null:
+        if i >= self._len:
+            return Null {}
+        return mem_load[u8](self._data, i)
+
+    fn __drop__(self):
+        if self._cap > 0:
+            mem_free(self._data)

@@ -1,0 +1,159 @@
+# Tiny testing framework.  Tests are functions returning a `Result`
+# (either pass or fail-with-message); the user wires them up in a
+# `main()` that calls `suite.run()`.  No discovery, no harness magic
+# — the whole thing is a hundred-odd lines of Ouro on top of
+# `std/bytes`, `std/string`, and the syscall layer.
+#
+# Typical use:
+#
+#   test = import("std/test")
+#
+#   fn test_two_plus_two() -> rc[test.Outcome]:
+#       return test.assert_eq_i32(2 + 2, 4, "addition is broken")
+#
+#   fn main() -> i32:
+#       suite: rc[test.Suite] = test.Suite.new()
+#       suite.add("two_plus_two", test_two_plus_two)
+#       return suite.run()
+#
+# The runner prints one line per test (`PASS <name>` or
+# `FAIL <name>: <msg>`), plus a summary, and returns the number of
+# failures (0 → success).
+#
+# Imported as `test = import("std/test")`.
+
+bytes = import("std/bytes")
+string = import("std/string")
+syscalls = import("./runtime/syscalls")
+
+
+# Outcome of a single test: a primitive `ok` flag plus an optional
+# failure message.  An enum-as-struct-field would be cleaner, but
+# v1 doesn't auto-box variants on assignment to a union slot — so
+# `kind: Result` would erase the tag.  A bool sidesteps that.
+struct Outcome:
+    ok: bool
+    msg: []u8
+
+    fn make_pass() -> rc[Self]:
+        return Self { ok: true, msg: "" }
+
+    fn make_fail(msg: []u8) -> rc[Self]:
+        return Self { ok: false, msg: msg }
+
+
+# Plain zero-arg test fn returning a boxed Outcome.
+TestFn: type = fn() -> rc[Outcome]
+
+
+# A registration buffer.  Two parallel growing arrays — names
+# (`[]u8` slices) and fn pointers — backed by raw `mem_alloc`'d
+# buffers so generic Vec semantics don't need to deal with fn-typed
+# elements (whose return type stays generic until specialization).
+struct Suite:
+    _names: var[ptr[u8]]      # cap * sizeof([]u8)
+    _fns:   var[ptr[u8]]      # cap * sizeof(TestFn) == 8
+    _n:     var[usize]
+    _cap:   var[usize]
+
+    fn new() -> rc[Self]:
+        return Self { _names: 0, _fns: 0, _n: 0, _cap: 0 }
+
+    fn add(self: ptr[var[Self]], name: []u8, f: TestFn):
+        if self._n >= self._cap:
+            self._grow()
+        mem_store[[]u8](self._names, self._n * sizeof[[]u8](), name)
+        mem_store[TestFn](self._fns, self._n * sizeof[TestFn](), f)
+        self._n = self._n + 1
+
+    fn _grow(self: ptr[var[Self]]):
+        new_cap: var[usize] = self._cap * 2
+        if new_cap < 8:
+            new_cap = 8
+        new_names = bytes.mem_alloc(new_cap * sizeof[[]u8]())
+        new_fns = bytes.mem_alloc(new_cap * sizeof[TestFn]())
+        if self._cap > 0:
+            bytes.copy(new_names, self._names, self._n * sizeof[[]u8]())
+            bytes.copy(new_fns, self._fns, self._n * sizeof[TestFn]())
+            bytes.mem_free(self._names)
+            bytes.mem_free(self._fns)
+        self._names = new_names
+        self._fns = new_fns
+        self._cap = new_cap
+
+    fn run(self) -> i32:
+        failed: var[i32] = 0
+        out: rc[bytes.Bytes] = bytes.Bytes.new()
+        i: var[usize] = 0
+        while i < self._n:
+            name = mem_load[[]u8](self._names, i * sizeof[[]u8]())
+            f = mem_load[TestFn](self._fns, i * sizeof[TestFn]())
+            outcome = f()
+            if outcome.ok:
+                out.push_bytes("PASS ")
+                out.push_bytes(name)
+                out.push(10u8)
+            else:
+                out.push_bytes("FAIL ")
+                out.push_bytes(name)
+                out.push_bytes(": ")
+                out.push_bytes(outcome.msg)
+                out.push(10u8)
+                failed = failed + 1
+            i = i + 1
+
+        # Summary line: "N tests, M failed".
+        out.push_bytes("---\n")
+        out.push_uint(self._n as u64)
+        out.push_bytes(" tests, ")
+        out.push_uint(failed as u64)
+        out.push_bytes(" failed\n")
+        syscalls.sys_write(1, out.data_ptr(), out.len())
+        return failed
+
+    fn __drop__(self):
+        if self._cap > 0:
+            bytes.mem_free(self._names)
+            bytes.mem_free(self._fns)
+
+
+# Convenience pass/fail constructors.
+fn ok() -> rc[Outcome]:
+    return Outcome.make_pass()
+
+fn fail(msg: []u8) -> rc[Outcome]:
+    return Outcome.make_fail(msg)
+
+
+# Per-type equality assertions.  v1 generics don't yet enforce a
+# `like[__eq__]` constraint, so each primitive has its own helper.
+# Add more as needed.
+fn assert_eq_i32(actual: i32, expected: i32, msg: []u8) -> rc[Outcome]:
+    if actual == expected:
+        return ok()
+    return fail(msg)
+
+fn assert_eq_i64(actual: i64, expected: i64, msg: []u8) -> rc[Outcome]:
+    if actual == expected:
+        return ok()
+    return fail(msg)
+
+fn assert_eq_u64(actual: u64, expected: u64, msg: []u8) -> rc[Outcome]:
+    if actual == expected:
+        return ok()
+    return fail(msg)
+
+fn assert_eq_bytes(actual: []u8, expected: []u8, msg: []u8) -> rc[Outcome]:
+    if string.eq(actual, expected):
+        return ok()
+    return fail(msg)
+
+fn assert_true(cond: bool, msg: []u8) -> rc[Outcome]:
+    if cond:
+        return ok()
+    return fail(msg)
+
+fn assert_false(cond: bool, msg: []u8) -> rc[Outcome]:
+    if not cond:
+        return ok()
+    return fail(msg)

@@ -1,0 +1,48 @@
+# `std/bytes`: StringBuilder-shaped growing byte buffer.  Push
+# bytes, slice fragments, signed and unsigned ints; read back via
+# `data_ptr()[0..len()]`.
+test   = import("std/test")
+bytes  = import("std/bytes")
+string = import("std/string")
+
+
+fn _slice_from(b: rc[bytes.Bytes]) -> []u8:
+    data = b.data_ptr()
+    return data[0..b.len()]
+
+
+fn test_push_bytes_and_int() -> rc[test.Outcome]:
+    b: rc[bytes.Bytes] = bytes.Bytes.new()
+    b.push_bytes("count: ")
+    b.push_int(42i64)
+    b.push(46u8)                   # '.'
+    b.push_int(-7i64)
+    data = b.data_ptr()
+    s = data[0..b.len()]
+    if not string.eq(s, "count: 42.-7"):
+        return test.fail("composed string mismatch")
+    return test.ok()
+
+fn test_push_uint_zero() -> rc[test.Outcome]:
+    b: rc[bytes.Bytes] = bytes.Bytes.new()
+    b.push_uint(0u64)
+    data = b.data_ptr()
+    if not string.eq(data[0..b.len()], "0"):
+        return test.fail("0u64")
+    return test.ok()
+
+fn test_push_uint_large() -> rc[test.Outcome]:
+    b: rc[bytes.Bytes] = bytes.Bytes.new()
+    b.push_uint(123456789u64)
+    data = b.data_ptr()
+    if not string.eq(data[0..b.len()], "123456789"):
+        return test.fail("123456789")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("push_bytes_and_int", test_push_bytes_and_int)
+    suite.add("push_uint_zero",     test_push_uint_zero)
+    suite.add("push_uint_large",    test_push_uint_large)
+    return suite.run()

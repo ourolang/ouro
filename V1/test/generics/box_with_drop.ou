@@ -1,0 +1,16 @@
+# Generic with a __drop__ method — verifies the specialized struct's
+# drop_fn slot correctly points at the specialized __drop__.
+io = import("std/io")
+
+struct Box[T]:
+    val: T
+
+    fn __drop__(self):
+        io.println("dropped")
+
+    fn make(v: T) -> rc[Self]:
+        return Self { val: v }
+
+fn main() -> i32:
+    b: rc[Box[i32]] = Box[i32].make(42)
+    return 0

@@ -1,0 +1,109 @@
+# Type aliases, enums, array literals.  Bundles the older
+# return-code-style tests.  The newer feature-specific files
+# (like_iter, recursive_ast, variant_autobox, diag_basic,
+# test_framework, infer_lhs/partial, intrinsic_infer, etc.) stay
+# separate — each documents one design decision end-to-end.
+test = import("std/test")
+
+
+struct ParseError:
+    pos: i64
+
+Result: type = i64 | ParseError
+
+fn _parse_alias(b: bool) -> Result:
+    if b:
+        return 42i64
+    return ParseError { pos: 5i64 }
+
+
+Option[T]: type = T | Null
+
+fn _maybe(b: bool) -> Option[i32]:
+    if b:
+        return 7i32
+    return Null {}
+
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn _color_pick(b: bool) -> Color:
+    if b:
+        return Color.Red
+    return Color.Blue
+
+fn _color_rank(c: Color) -> i32:
+    match c:
+        _: Color.Red:   return 1i32
+        _: Color.Green: return 2i32
+        _: Color.Blue:  return 3i32
+
+
+fn test_type_alias_basic() -> rc[test.Outcome]:
+    r = _parse_alias(true)
+    if r ?= ParseError:
+        return test.fail("alias narrowed to ParseError on true")
+    elif r != 42i64:
+        return test.fail("alias value != 42")
+    return test.ok()
+
+fn test_type_alias_generic() -> rc[test.Outcome]:
+    r = _maybe(true)
+    if r ?= Null:
+        return test.fail("Option[i32] narrowed to Null on true")
+    elif r != 7i32:
+        return test.fail("Option[i32] value != 7")
+    return test.ok()
+
+fn test_enum_basic() -> rc[test.Outcome]:
+    c = _color_pick(true)
+    if _color_rank(c) != 1i32:
+        return test.fail("rank(Red) != 1")
+    if _color_rank(_color_pick(false)) != 3i32:
+        return test.fail("rank(Blue) != 3")
+    return test.ok()
+
+fn test_array_literal_primitive() -> rc[test.Outcome]:
+    xs = [1i32, 2i32, 3i32, 4i32, 5i32]
+    if xs.len != 5: return test.fail("len")
+    if xs[0] != 1i32: return test.fail("xs[0]")
+    if xs[2] != 3i32: return test.fail("xs[2]")
+    if xs[4] != 5i32: return test.fail("xs[4]")
+    return test.ok()
+
+fn test_array_literal_empty() -> rc[test.Outcome]:
+    empty: []i32 = []
+    if empty.len != 0:
+        return test.fail("empty.len != 0")
+    return test.ok()
+
+fn test_array_literal_of_strings() -> rc[test.Outcome]:
+    words = ["if", "else", "while"]
+    if words.len != 3: return test.fail("len")
+    if words[0].len != 2: return test.fail("words[0].len")
+    if words[1].len != 4: return test.fail("words[1].len")
+    return test.ok()
+
+fn test_array_literal_indexed_sum() -> rc[test.Outcome]:
+    ns = [10i32, 20i32, 30i32, 40i32]
+    s: var[i32] = 0
+    i: var[usize] = 0
+    while i < ns.len:
+        s = s + ns[i]
+        i = i + 1
+    return test.assert_eq_i32(s, 100i32, "10+20+30+40")
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("type_alias_basic",         test_type_alias_basic)
+    suite.add("type_alias_generic",       test_type_alias_generic)
+    suite.add("enum_basic",               test_enum_basic)
+    suite.add("array_literal_primitive",  test_array_literal_primitive)
+    suite.add("array_literal_empty",      test_array_literal_empty)
+    suite.add("array_literal_of_strings", test_array_literal_of_strings)
+    suite.add("array_literal_indexed_sum", test_array_literal_indexed_sum)
+    return suite.run()

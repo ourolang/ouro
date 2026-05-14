@@ -1,0 +1,13 @@
+# LHS-driven inference: call has no explicit type args, the binding's
+# annotation supplies K and V.
+map = import("std/map")
+
+fn main() -> i32:
+    m: rc[map.HashMap[u64, i32]] = map.HashMap.new()
+    m.put(1u64, 42)
+    a = m.get(1u64)
+    if a ?= Null:
+        return 1
+    elif a != 42:
+        return 2
+    return 0

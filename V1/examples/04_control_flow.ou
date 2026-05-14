@@ -1,0 +1,46 @@
+# if / elif / else, match, and loop.
+#
+# Ouro prefers early-return over `return if cond: a else: b`. The
+# if-as-expression form does exist (used inline as a binding's RHS) but
+# the canonical style for branching returns is shown in `sign` below.
+#
+# `match` dispatches on value (with a `_` wildcard catch-all). When used
+# as a statement (as in `print_name`), the value is discarded.
+#
+# Run:  make run FILE=examples/04_control_flow.ou
+# Out:  sign(-5) = -1
+#       sign(0)  = 0
+#       sign(7)  = 1
+#       one
+#       two
+#       three
+#       many
+
+io = import("std/io")
+
+fn sign(x: i32) -> i32:
+    if x > 0:
+        return 1
+    elif x < 0:
+        return -1
+    return 0
+
+fn print_name(x: i32):
+    match x:
+        1: io.println("one")
+        2: io.println("two")
+        3: io.println("three")
+        _:
+            io.println("many")
+
+fn main() -> i32:
+    io.printf("sign(-5) = %d\n", sign(-5))
+    io.printf("sign(0)  = %d\n", sign(0))
+    io.printf("sign(7)  = %d\n", sign(7))
+
+    n: var[i32] = 1
+    while n <= 4:
+        print_name(n)
+        n = n + 1
+
+    return 0

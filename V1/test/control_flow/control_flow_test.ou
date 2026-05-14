@@ -1,0 +1,220 @@
+# Control-flow construct round-up.  Consolidates the per-file tests
+# that used to live in this directory into one std/test suite.
+test = import("std/test")
+
+
+# ── if / elif / else ─────────────────────────────────────────────────────────
+
+fn test_if_basic() -> rc[test.Outcome]:
+    n: var[i32] = 0
+    if true:
+        n = 1
+    return test.assert_eq_i32(n, 1, "true if-body should run")
+
+fn test_if_else() -> rc[test.Outcome]:
+    n: var[i32] = 0
+    if false:
+        n = 1
+    else:
+        n = 2
+    return test.assert_eq_i32(n, 2, "false → else branch")
+
+fn _classify_sign(x: i32) -> i32:
+    if x < 0:
+        return -1
+    elif x == 0:
+        return 0
+    else:
+        return 1
+
+fn test_if_elif_else() -> rc[test.Outcome]:
+    if _classify_sign(-5) != -1: return test.fail("classify(-5) != -1")
+    if _classify_sign(0)  !=  0: return test.fail("classify(0) != 0")
+    if _classify_sign(5)  !=  1: return test.fail("classify(5) != 1")
+    return test.ok()
+
+
+# `if` as expression — yields the chosen branch's value.
+fn _pick_sign(x: i32) -> i32:
+    sign = if x > 0:
+        1
+    else:
+        -1
+    return sign
+
+fn test_if_expression() -> rc[test.Outcome]:
+    if _pick_sign(5)  !=  1: return test.fail("pick(5) != 1")
+    if _pick_sign(-3) != -1: return test.fail("pick(-3) != -1")
+    return test.ok()
+
+
+# `if` as expression with computed (non-literal) arm values.
+fn _pick_computed(x: i32) -> i32:
+    result = if x > 0:
+        x + 100
+    else:
+        x - 100
+    return result
+
+fn test_if_yields_computed() -> rc[test.Outcome]:
+    if _pick_computed(5)  !=  105: return test.fail("pick(5) != 105")
+    if _pick_computed(-3) != -103: return test.fail("pick(-3) != -103")
+    return test.ok()
+
+
+# ── for ─────────────────────────────────────────────────────────────────────
+
+fn test_for_range() -> rc[test.Outcome]:
+    sum: var[isize] = 0
+    for i in 0..5:
+        sum = sum + i
+    if sum != 10: return test.fail("0..5 sum != 10")
+    n: var[isize] = 0
+    for _ in 0..3:
+        n = n + 1
+    if n != 3: return test.fail("0..3 iter count != 3")
+    acc: var[isize] = 0
+    for i in 2..5:
+        acc = acc + i
+    if acc != 9: return test.fail("2..5 sum != 9")
+    return test.ok()
+
+fn test_for_slice_elements() -> rc[test.Outcome]:
+    s = "ABC"
+    sum: var[i32] = 0
+    for b in s:
+        sum = sum + b
+    return test.assert_eq_i32(sum, 198i32, "sum of 'ABC' bytes")
+
+fn test_for_string_iter() -> rc[test.Outcome]:
+    s = "ABC"
+    n: var[i32] = 0
+    for _ in s:
+        n = n + 1
+    return test.assert_eq_i32(n, 3i32, "iter count of 'ABC'")
+
+
+# ── loop / while / break / continue ──────────────────────────────────────────
+
+fn test_loop_break() -> rc[test.Outcome]:
+    n: var[i32] = 0
+    loop:
+        if n >= 10: break
+        n = n + 1
+    return test.assert_eq_i32(n, 10i32, "loop break at 10")
+
+fn test_loop_continue() -> rc[test.Outcome]:
+    n: var[i32] = 0
+    sum: var[i32] = 0
+    loop:
+        if n >= 10: break
+        n = n + 1
+        if n % 2 == 0: continue
+        sum = sum + n
+    return test.assert_eq_i32(sum, 25i32, "odd sum 1..9")
+
+fn test_nested_loops() -> rc[test.Outcome]:
+    i: var[i32] = 0
+    total: var[i32] = 0
+    loop:
+        if i >= 3: break
+        j: var[i32] = 0
+        loop:
+            if j >= 3: break
+            total = total + 1
+            j = j + 1
+        i = i + 1
+    return test.assert_eq_i32(total, 9i32, "3x3 inner counts")
+
+fn test_while_basic() -> rc[test.Outcome]:
+    n: var[i32] = 0
+    while n < 10:
+        n = n + 1
+    return test.assert_eq_i32(n, 10i32, "while → 10")
+
+fn test_while_break() -> rc[test.Outcome]:
+    n: var[i32] = 0
+    while true:
+        n = n + 1
+        if n >= 7: break
+    return test.assert_eq_i32(n, 7i32, "while break at 7")
+
+fn test_while_with_continue() -> rc[test.Outcome]:
+    n: var[i32] = 0
+    sum: var[i32] = 0
+    while n < 10:
+        n = n + 1
+        if n % 2 == 0: continue
+        sum = sum + n
+    return test.assert_eq_i32(sum, 25i32, "odd sum 1..9 via while")
+
+
+# ── match ───────────────────────────────────────────────────────────────────
+
+fn _classify_match(x: i32) -> i32:
+    return match x:
+        1: 100
+        2: 200
+        3: 300
+        _: 0
+
+fn test_match_value() -> rc[test.Outcome]:
+    if _classify_match(1)  != 100: return test.fail("match(1)")
+    if _classify_match(2)  != 200: return test.fail("match(2)")
+    if _classify_match(3)  != 300: return test.fail("match(3)")
+    if _classify_match(99) !=   0: return test.fail("match(99)")
+    return test.ok()
+
+fn _pick_match(x: i32) -> i32:
+    return match x:
+        0:
+            x + 1
+        1:
+            x + 10
+        _:
+            x + 100
+
+fn test_match_yields_computed() -> rc[test.Outcome]:
+    if _pick_match(0)  !=   1: return test.fail("pick(0)")
+    if _pick_match(1)  !=  11: return test.fail("pick(1)")
+    if _pick_match(99) != 199: return test.fail("pick(99)")
+    return test.ok()
+
+
+# ── bitwise ─────────────────────────────────────────────────────────────────
+
+fn test_bitwise() -> rc[test.Outcome]:
+    if (0xF0 & 0x33) != 0x30: return test.fail("AND")
+    if (0xF0 | 0x0F) != 0xFF: return test.fail("OR")
+    if (0xFF ^ 0x0F) != 0xF0: return test.fail("XOR")
+    if (1 << 4)      !=   16: return test.fail("SHL")
+    if (256 >> 4)    !=   16: return test.fail("SHR")
+    n: i32 = -16
+    if (n >> 2) != -4: return test.fail("arithmetic SHR signed")
+    u: u32 = 0x80000000u32
+    if (u >> 1) != 0x40000000u32: return test.fail("logical SHR unsigned")
+    if (1 + 2 | 4) != 7: return test.fail("precedence: + tighter than |")
+    if (0x1 | 0x6 & 0x2) != 3: return test.fail("precedence: & tighter than |")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("if_basic",            test_if_basic)
+    suite.add("if_else",             test_if_else)
+    suite.add("if_elif_else",        test_if_elif_else)
+    suite.add("if_expression",       test_if_expression)
+    suite.add("if_yields_computed",  test_if_yields_computed)
+    suite.add("for_range",           test_for_range)
+    suite.add("for_slice_elements",  test_for_slice_elements)
+    suite.add("for_string_iter",     test_for_string_iter)
+    suite.add("loop_break",          test_loop_break)
+    suite.add("loop_continue",       test_loop_continue)
+    suite.add("nested_loops",        test_nested_loops)
+    suite.add("while_basic",         test_while_basic)
+    suite.add("while_break",         test_while_break)
+    suite.add("while_with_continue", test_while_with_continue)
+    suite.add("match_value",         test_match_value)
+    suite.add("match_yields_computed", test_match_yields_computed)
+    suite.add("bitwise",             test_bitwise)
+    return suite.run()

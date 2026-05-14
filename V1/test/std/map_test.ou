@@ -1,0 +1,72 @@
+# `std/map.HashMap[K, V]`: open-addressing table with `hash[K]` /
+# `eq[K]` dispatch.  Covers u64 and string keys side-by-side.
+test = import("std/test")
+map  = import("std/map")
+
+
+fn test_u64_keyed() -> rc[test.Outcome]:
+    m: rc[map.HashMap[u64, i32]] = map.HashMap[u64, i32].new()
+    m.put(10u64, 1i32)
+    m.put(20u64, 2i32)
+    m.put(30u64, 3i32)
+    m.put(40u64, 4i32)
+    m.put(50u64, 5i32)
+    m.put(60u64, 6i32)
+    m.put(70u64, 7i32)
+    m.put(80u64, 8i32)
+    m.put(90u64, 9i32)             # trigger rehash here
+    m.put(100u64, 10i32)
+    if m.len() != 10:
+        return test.fail("len != 10 after 10 puts")
+    a = m.get(10u64)
+    if a ?= Null:
+        return test.fail("get(10) missing")
+    elif a != 1i32:
+        return test.fail("get(10) != 1")
+    if not (m.get(999u64) ?= Null):
+        return test.fail("get(999) should miss")
+    return test.ok()
+
+fn test_u64_overwrite() -> rc[test.Outcome]:
+    m: rc[map.HashMap[u64, i32]] = map.HashMap[u64, i32].new()
+    m.put(10u64, 1i32)
+    m.put(10u64, 99i32)
+    if m.len() != 1:
+        return test.fail("len after overwrite")
+    a = m.get(10u64)
+    if a ?= Null:
+        return test.fail("get missing after overwrite")
+    elif a != 99i32:
+        return test.fail("overwrite didn't take")
+    return test.ok()
+
+fn test_string_keyed() -> rc[test.Outcome]:
+    m: rc[map.HashMap[[]u8, i64]] = map.HashMap[[]u8, i64].new()
+    m.put("alpha",   1i64)
+    m.put("beta",    2i64)
+    m.put("gamma",   3i64)
+    m.put("delta",   4i64)
+    m.put("epsilon", 5i64)
+    m.put("zeta",    6i64)
+    m.put("eta",     7i64)
+    m.put("theta",   8i64)
+    m.put("iota",    9i64)         # rehash here
+    m.put("kappa",  10i64)
+    if m.len() != 10:
+        return test.fail("string len")
+    a = m.get("alpha")
+    if a ?= Null:
+        return test.fail("alpha missing")
+    elif a != 1i64:
+        return test.fail("alpha != 1")
+    if not (m.get("missing") ?= Null):
+        return test.fail("'missing' should not be found")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("u64_keyed",     test_u64_keyed)
+    suite.add("u64_overwrite", test_u64_overwrite)
+    suite.add("string_keyed",  test_string_keyed)
+    return suite.run()

@@ -1,0 +1,21 @@
+# Cross-module struct mechanics: a foreign module's static method
+# returns a bare struct by value, and the caller reads its fields.
+# Exercises QBE aggregate-return ABI across module boundaries — the
+# type decl (`:pair__Pair`) lives in the defining module's IR and
+# the call site qualifies the type name accordingly.
+test = import("std/test")
+pair = import("./_pair")
+
+
+fn test_cross_module_struct_return() -> rc[test.Outcome]:
+    p = pair.Pair.make(3i32, 4i32)
+    if p.sum() != 7i32: return test.fail("sum")
+    if p.a != 3i32:     return test.fail("a")
+    if p.b != 4i32:     return test.fail("b")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("cross_module_struct_return", test_cross_module_struct_return)
+    return suite.run()

@@ -1,0 +1,74 @@
+# Compiler-synthesized `__set__(self: ptr[var[Self]], name: []u8,
+# v: value.Value)` — present on every struct in modules that import
+# `std/value`.  Only `var[T]` fields get arms; immutable fields and
+# fields whose type isn't a Value variant are silently skipped (the
+# call becomes a no-op for those names).  The arm body narrows `v`
+# with `?=` and assigns only on a successful match — a wrong-variant
+# write does nothing, same as an unknown name.
+test  = import("std/test")
+value = import("std/value")
+
+
+struct Box:
+    n: var[i32]
+    flag: var[bool]
+    label: var[[]u8]
+
+
+fn test_set_int() -> rc[test.Outcome]:
+    b = Box { n: 0i32, flag: false, label: "" }
+    b.__set__("n", 42i32)
+    return test.assert_eq_i32(b.n, 42i32, "n via __set__")
+
+
+fn test_set_bool() -> rc[test.Outcome]:
+    b = Box { n: 0i32, flag: false, label: "" }
+    b.__set__("flag", true)
+    if b.flag:
+        return test.ok()
+    return test.fail("flag not set")
+
+
+fn test_set_slice() -> rc[test.Outcome]:
+    b = Box { n: 0i32, flag: false, label: "" }
+    b.__set__("label", "ok")
+    if b.label.len == 2:
+        return test.ok()
+    return test.fail("label not set")
+
+
+fn test_set_unknown_key() -> rc[test.Outcome]:
+    b = Box { n: 11i32, flag: false, label: "" }
+    b.__set__("missing", 99i32)
+    return test.assert_eq_i32(b.n, 11i32, "unknown key is no-op")
+
+
+fn test_set_wrong_variant() -> rc[test.Outcome]:
+    b = Box { n: 11i32, flag: false, label: "" }
+    b.__set__("n", true)
+    return test.assert_eq_i32(b.n, 11i32, "wrong variant is no-op")
+
+
+# User-defined __set__ wins — compiler synthesis backs off.
+struct Override:
+    a: var[i32]
+
+    fn __set__(self: ptr[var[Self]], name: []u8, v: value.Value):
+        self.a = 777i32
+
+
+fn test_user_override_wins() -> rc[test.Outcome]:
+    o = Override { a: 0i32 }
+    o.__set__("a", 1i32)
+    return test.assert_eq_i32(o.a, 777i32, "user override returns 777")
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("set_int",         test_set_int)
+    suite.add("set_bool",        test_set_bool)
+    suite.add("set_slice",       test_set_slice)
+    suite.add("set_unknown_key", test_set_unknown_key)
+    suite.add("set_wrong_variant", test_set_wrong_variant)
+    suite.add("user_override",   test_user_override_wins)
+    return suite.run()

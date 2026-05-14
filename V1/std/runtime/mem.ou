@@ -1,0 +1,102 @@
+# Raw bytes allocator.  Pre-mmap'd 256 MB region, bump-allocated
+# with a first-fit free list for `mem_free` reuse.  Auto-loaded
+# as a runtime module; the public symbols `mem_alloc` /
+# `mem_free` are bare (no module prefix) since std/bytes,
+# std/runtime/arc, etc. dispatch to them by name.
+#
+# Block layout: each allocation begins with an 8-byte size
+# header (`total` bytes); the returned user pointer is `block +
+# 8`.  Free blocks reuse the same layout:
+#   offset 0 .. 8  : size (preserved from alloc)
+#   offset 8 .. 16 : next-free pointer (overlays user data slot)
+#
+# The free list is a singly-linked stack; `mem_free` pushes,
+# `mem_alloc` walks first-fit and splices out the first big-
+# enough entry.
+syscalls = import("./syscalls")
+
+
+# 256 MB.  Programs that need more than this exhaust the bump
+# region and trap via `sys_exit(137)`.
+fn _heap_size() -> usize:
+    return 268435456
+
+
+# Round `n` up to the nearest multiple of `a`.  No bitwise-NOT
+# (`~`) in v1, so the textbook `(n + a - 1) & ~(a - 1)` form
+# becomes an arithmetic round-up via modulo.
+fn _align_up(n: usize, a: usize) -> usize:
+    excess = n % a
+    if excess == 0:
+        return n
+    return n + (a - excess)
+
+
+# Module-level mutable globals — backed by the data section.
+heap_start: var[ptr[u8]] = 0 as ptr[u8]
+heap_bump: var[ptr[u8]] = 0 as ptr[u8]
+heap_end: var[ptr[u8]] = 0 as ptr[u8]
+free_list: var[ptr[u8]] = 0 as ptr[u8]
+
+
+# Reserve the heap region on first call.  mmap returns the page-
+# aligned base; we mark its end and start bumping from the front.
+fn _heap_init():
+    m = syscalls.sys_mmap_anon(_heap_size())
+    if (m as i64) < 0:
+        syscalls.sys_exit(137)
+    heap_start = m
+    heap_bump = m
+    heap_end = ((m as i64) + _heap_size() as i64) as ptr[u8]
+
+
+# Allocate `size` user bytes.  Returns a pointer past the 8-byte
+# size header; the slot can later be handed back to `mem_free`.
+# Aborts on out-of-memory.
+fn mem_alloc(size: usize) -> ptr[u8]:
+    if (heap_start as i64) == 0:
+        _heap_init()
+    total = _align_up(size + 8, 16)
+
+    # First-fit walk over the free list.  Two cursors (`prev` +
+    # `cur`) so we can splice out the match without dereferencing
+    # a pointer-to-pointer.
+    prev: var[ptr[u8]] = 0 as ptr[u8]
+    cur: var[ptr[u8]] = free_list
+    while (cur as i64) != 0:
+        cur_size = mem_load[usize](cur, 0)
+        if cur_size >= total:
+            next = mem_load[ptr[u8]](cur, 8)
+            if (prev as i64) == 0:
+                free_list = next
+            else:
+                mem_store[ptr[u8]](prev, 8, next)
+            # The size header is already populated; we overwrote
+            # the `next` slot earlier when this block was on the
+            # free list — restore it as a no-op store to keep
+            # later reads consistent.  (Alloc just trusts the
+            # existing size in offset 0.)
+            return ((cur as i64) + 8) as ptr[u8]
+        prev = cur
+        cur = mem_load[ptr[u8]](cur, 8)
+
+    # No fit on the free list — bump.
+    bump = heap_bump
+    remaining = (heap_end as i64) - (bump as i64)
+    if (remaining as usize) < total:
+        syscalls.sys_exit(137)
+    mem_store[usize](bump, 0, total)
+    heap_bump = ((bump as i64) + total as i64) as ptr[u8]
+    return ((bump as i64) + 8) as ptr[u8]
+
+
+# Push the block back onto the free list.  No coalescing; over
+# time the free list grows long but blocks of matching sizes
+# still get reused efficiently in the doubling-grow allocator
+# clients (`std/bytes`, `std/vec`).
+fn mem_free(p: ptr[u8]):
+    if (p as i64) == 0:
+        return
+    block = ((p as i64) - 8) as ptr[u8]
+    mem_store[ptr[u8]](block, 8, free_list)
+    free_list = block

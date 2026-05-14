@@ -1,0 +1,20 @@
+# Returning a borrowed managed param: arc_inc(x) on the return path
+# gives the caller a fresh rc.  Without it, both the caller's
+# binding and the returned ref would release the same allocation
+# (double-free / use-after-free).
+io = import("std/io")
+
+struct R:
+    id: i32
+
+    fn __drop__(self):
+        io.println("dropped")
+
+fn passthrough(x: rc[R]) -> rc[R]:
+    return x
+
+fn main() -> i32:
+    a: rc[R] = R { id: 1 }
+    b: rc[R] = passthrough(a)   # both a and b hold a; rc=2 after inc
+    return 0
+    # release a → rc=1, release b → rc=0 → drop ONCE

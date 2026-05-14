@@ -1,0 +1,7 @@
+io = import("std/io")
+
+fn main() -> i32:
+    io.println("line 1")
+    io.println("line 2")
+    io.println("line 3")
+    return 0

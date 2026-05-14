@@ -1,0 +1,50 @@
+# `std/parse`: each parse_* returns `T | parse.ParseError`.
+# Module-qualified type names (`parse.ParseError`) flow through
+# `?=` narrowing the same as local structs.
+test  = import("std/test")
+parse = import("std/parse")
+
+
+fn test_parse_int_ok() -> rc[test.Outcome]:
+    r = parse.parse_int("42")
+    if r ?= parse.ParseError:
+        return test.fail("'42' should parse")
+    elif r != 42i64:
+        return test.fail("'42' != 42")
+    return test.ok()
+
+fn test_parse_int_negative() -> rc[test.Outcome]:
+    r = parse.parse_int("-7")
+    if r ?= parse.ParseError:
+        return test.fail("'-7' should parse")
+    elif r != -7i64:
+        return test.fail("'-7' != -7")
+    return test.ok()
+
+fn test_parse_int_errors() -> rc[test.Outcome]:
+    if not (parse.parse_int("") ?= parse.ParseError):
+        return test.fail("'' should err")
+    if not (parse.parse_int("4x") ?= parse.ParseError):
+        return test.fail("'4x' should err")
+    if not (parse.parse_int("-") ?= parse.ParseError):
+        return test.fail("'-' should err")
+    return test.ok()
+
+fn test_parse_uint() -> rc[test.Outcome]:
+    u = parse.parse_uint("123")
+    if u ?= parse.ParseError:
+        return test.fail("'123' should parse")
+    elif u != 123u64:
+        return test.fail("'123' != 123")
+    if not (parse.parse_uint("-1") ?= parse.ParseError):
+        return test.fail("'-1' should err for parse_uint")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("parse_int_ok",       test_parse_int_ok)
+    suite.add("parse_int_negative", test_parse_int_negative)
+    suite.add("parse_int_errors",   test_parse_int_errors)
+    suite.add("parse_uint",         test_parse_uint)
+    return suite.run()

@@ -1,0 +1,119 @@
+# Primitive operations + literal forms.  Bundles the per-file tests
+# that previously lived in this directory.  `feature_tour.ou` stays
+# separate — it's a side-effecting demo of every feature, not a
+# unit test.
+test = import("std/test")
+
+
+fn test_arithmetic_int() -> rc[test.Outcome]:
+    if 2 + 3 != 5: return test.fail("+")
+    if 10 - 4 != 6: return test.fail("-")
+    if 6 * 7 != 42: return test.fail("*")
+    if 20 / 4 != 5: return test.fail("/")
+    if 17 % 5 != 2: return test.fail("%")
+    return test.ok()
+
+fn test_arithmetic_precedence() -> rc[test.Outcome]:
+    if 2 + 3 * 4 != 14:   return test.fail("* tighter than +")
+    if (2 + 3) * 4 != 20: return test.fail("parens override")
+    if 100 / 5 / 4 != 5:  return test.fail("left-assoc /")
+    if 100 - 5 - 4 != 91: return test.fail("left-assoc -")
+    return test.ok()
+
+fn test_bitwise_or() -> rc[test.Outcome]:
+    if (0xF0 | 0x0F) != 0xFF: return test.fail("|")
+    if (0 | 0) != 0:          return test.fail("0 | 0")
+    if (1 | 2 | 4) != 7:      return test.fail("chained |")
+    return test.ok()
+
+fn test_bool_literal() -> rc[test.Outcome]:
+    if true == false: return test.fail("true == false")
+    if not true:      return test.fail("not true")
+    if false:         return test.fail("false truthy")
+    return test.ok()
+
+fn test_byte_literal() -> rc[test.Outcome]:
+    if 'A' != 65:    return test.fail("'A'")
+    if '\n' != 10:   return test.fail("'\\n'")
+    if '0' != 48:    return test.fail("'0'")
+    if '\x7F' != 127: return test.fail("'\\x7F'")
+    return test.ok()
+
+fn test_comparison_int() -> rc[test.Outcome]:
+    if not (1 < 2):  return test.fail("<")
+    if not (2 > 1):  return test.fail(">")
+    if not (2 <= 2): return test.fail("<=")
+    if not (2 >= 2): return test.fail(">=")
+    if not (1 == 1): return test.fail("==")
+    if not (1 != 2): return test.fail("!=")
+    return test.ok()
+
+fn test_float_literal() -> rc[test.Outcome]:
+    x = 0.5
+    if x != 0.5: return test.fail("float literal eq")
+    return test.ok()
+
+fn test_literals() -> rc[test.Outcome]:
+    if 0xFF != 255:   return test.fail("hex")
+    if 0b1010 != 10:  return test.fail("binary")
+    if 0o17 != 15:    return test.fail("octal")
+    if 1_000 != 1000: return test.fail("digit separator")
+    if 42i32 != 42:   return test.fail("i32 suffix")
+    return test.ok()
+
+fn test_logical() -> rc[test.Outcome]:
+    if not (true and true): return test.fail("and")
+    if true and false:      return test.fail("and false")
+    if not (true or false): return test.fail("or")
+    if false or false:      return test.fail("or false")
+    if not (not false):     return test.fail("not not")
+    return test.ok()
+
+fn test_return_zero() -> rc[test.Outcome]:
+    return test.ok()
+
+fn test_slice_index() -> rc[test.Outcome]:
+    s = "ABC"
+    if s[0] != 65u8: return test.fail("s[0]")
+    if s[1] != 66u8: return test.fail("s[1]")
+    if s[2] != 67u8: return test.fail("s[2]")
+    return test.ok()
+
+fn test_slice_ptr_field() -> rc[test.Outcome]:
+    s = "hi"
+    if s.len != 2: return test.fail("s.len")
+    _ = s.ptr
+    return test.ok()
+
+fn test_string_escapes() -> rc[test.Outcome]:
+    s = "a\nb"
+    if s[0] != 'a':  return test.fail("s[0]")
+    if s[1] != '\n': return test.fail("s[1]")
+    if s[2] != 'b':  return test.fail("s[2]")
+    if s.len != 3:   return test.fail("s.len")
+    return test.ok()
+
+fn test_unary_neg() -> rc[test.Outcome]:
+    if -5 + 5 != 0: return test.fail("-5 + 5")
+    x = 7
+    if -x + 7 != 0: return test.fail("-x + 7")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("arithmetic_int",        test_arithmetic_int)
+    suite.add("arithmetic_precedence", test_arithmetic_precedence)
+    suite.add("bitwise_or",            test_bitwise_or)
+    suite.add("bool_literal",          test_bool_literal)
+    suite.add("byte_literal",          test_byte_literal)
+    suite.add("comparison_int",        test_comparison_int)
+    suite.add("float_literal",         test_float_literal)
+    suite.add("literals",              test_literals)
+    suite.add("logical",               test_logical)
+    suite.add("return_zero",           test_return_zero)
+    suite.add("slice_index",           test_slice_index)
+    suite.add("slice_ptr_field",       test_slice_ptr_field)
+    suite.add("string_escapes",        test_string_escapes)
+    suite.add("unary_neg",             test_unary_neg)
+    return suite.run()

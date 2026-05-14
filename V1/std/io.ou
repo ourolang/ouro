@@ -1,0 +1,42 @@
+# Console I/O: `io.println(s)` and `io.print(s)` in pure Ouro,
+# calling into the asm-emitted `sys_write` for the actual syscall.
+#
+# Lives under `std/` and is imported as `io = import("std/io")`.
+# Symbols emit with the `io__` prefix (e.g. `$io__println`).  The
+# bridge into syscall land goes through `runtime/syscalls.ou`,
+# which is auto-loaded with bare symbols.
+#
+# `printf` exists as a codegen intrinsic (`io.printf("fmt", arg)`)
+# rather than a declared `extern` — the intrinsic auto-coerces a
+# `[]u8` slice fmt arg to its data pointer.  Switching to a real
+# `extern printf(fmt: ptr[u8], ...) -> i32` would force every
+# caller to write `printf("fmt".ptr, arg)` explicitly.  Once Ouro
+# has implicit `[]u8 → ptr[u8]` coercion (or a `cstr` type), the
+# extern form can replace the intrinsic.
+syscalls = import("./runtime/syscalls")
+
+
+# Write `s` to stdout followed by a newline.
+fn println(s: []u8):
+    if s.len > 0:
+        syscalls.sys_write(1, s.ptr, s.len)
+    syscalls.sys_write(1, "\n".ptr, 1)
+
+
+# Write `s` to stdout, no trailing newline.
+fn print(s: []u8):
+    if s.len > 0:
+        syscalls.sys_write(1, s.ptr, s.len)
+
+
+# Same as `println`, but writes to stderr (fd 2).
+fn eprintln(s: []u8):
+    if s.len > 0:
+        syscalls.sys_write(2, s.ptr, s.len)
+    syscalls.sys_write(2, "\n".ptr, 1)
+
+
+# Same as `print`, but writes to stderr.
+fn eprint(s: []u8):
+    if s.len > 0:
+        syscalls.sys_write(2, s.ptr, s.len)

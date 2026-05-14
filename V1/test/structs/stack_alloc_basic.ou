@@ -1,0 +1,22 @@
+# Stack-by-default in action: a bare struct binding allocates on the
+# function's stack frame (alloca) and gets a direct `__drop__` call
+# at scope exit — no `arc_alloc` syscall, no refcount manipulation.
+#
+# The annotated `arc[R]` form (cf. arc_*.ou tests) is the explicit
+# heap path.  Bare T is the stack path.
+io = import("std/io")
+
+struct Tag:
+    n: i32
+
+    fn __drop__(self):
+        io.printf("tag %d\n", self.n)
+
+fn main() -> i32:
+    # Two stack-allocated tags.  No heap alloc; LIFO __drop__ fires
+    # at scope exit.
+    a = Tag { n: 1 }
+    b = Tag { n: 2 }
+    if a.n + b.n != 3:
+        return 1
+    return 0

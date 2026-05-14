@@ -1,0 +1,29 @@
+# weak[T] whose referent has been dropped — reading produces a
+# Null, which `?=` narrows correctly.  Verifies the weak-vs-strong
+# header semantics: a weak ref keeps the BLOCK alive (so weak_upgrade
+# can read its strong count) but lets the user data drop.
+io = import("std/io")
+
+struct Node:
+    name: i32
+
+    fn __drop__(self):
+        io.printf("dropped %d\n", self.name)
+
+struct Watcher:
+    target: weak[Node]
+
+fn make_watcher() -> rc[Watcher]:
+    n: rc[Node] = Node { name: 7 }
+    w: rc[Watcher] = Watcher { target: n }
+    return w
+    # n's strong rc → 0 here, Node's __drop__ fires.
+    # Block lives because w still holds a weak ref.
+
+fn main() -> i32:
+    w: rc[Watcher] = make_watcher()
+    r = w.target            # weak_upgrade returns NULL → Null box
+    if r ?= Null:
+        io.println("dangling")
+        return 0
+    return 1

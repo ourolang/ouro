@@ -1,0 +1,10 @@
+# A geometry helper. Exports primitive-returning functions only —
+# cross-module struct sharing isn't supported yet in v1.
+fn square_area(side: i64) -> i64:
+    return side * side
+
+fn rect_area(w: i64, h: i64) -> i64:
+    return w * h
+
+fn rect_perimeter(w: i64, h: i64) -> i64:
+    return 2 * (w + h)

@@ -1,0 +1,61 @@
+# Tagged-union narrowing with `?=`.  Stdout-matching union tests
+# (box_no_drop_for_primitive_variant, box_releases_boxed_struct)
+# stay separate.
+test = import("std/test")
+
+
+struct E:
+    pass
+
+struct ParseError:
+    code: i32
+
+
+fn _parse_prim(fail: bool) -> i64 | E:
+    if fail:
+        return E {}
+    return 99i64
+
+fn _parse_struct(fail: bool) -> i32 | ParseError:
+    if fail:
+        return ParseError { code: 42i32 }
+    return 0i32
+
+
+fn test_narrowed_primitive() -> rc[test.Outcome]:
+    r = _parse_prim(false)
+    if r ?= E:
+        return test.fail("false → E?")
+    elif r != 99i64:
+        return test.fail("payload != 99")
+    return test.ok()
+
+fn test_narrowed_struct_field() -> rc[test.Outcome]:
+    r = _parse_struct(true)
+    if r ?= ParseError:
+        if r.code != 42i32:
+            return test.fail("code != 42")
+    else:
+        return test.fail("true → no ParseError?")
+    return test.ok()
+
+fn test_type_test_error_branch() -> rc[test.Outcome]:
+    r = _parse_struct(true)
+    if r ?= ParseError:
+        return test.ok()
+    return test.fail("error branch should fire")
+
+fn test_type_test_value_branch() -> rc[test.Outcome]:
+    r = _parse_struct(false)
+    if r ?= ParseError:
+        return test.fail("value branch should fire, not error")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("narrowed_primitive",     test_narrowed_primitive)
+    suite.add("narrowed_struct_field",  test_narrowed_struct_field)
+    suite.add("type_test_error_branch", test_type_test_error_branch)
+    suite.add("type_test_value_branch", test_type_test_value_branch)
+    return suite.run()

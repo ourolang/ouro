@@ -1,0 +1,118 @@
+# A guided tour of every Ouro feature implemented today.
+#
+# Covers: imports, primitives + numeric suffixes, default-const +
+# var[T] mutation, slices (string-backed), structs with fields +
+# methods + __drop__, generic structs (Box[T]), generic free fns
+# (min[T]), tagged unions + ?= narrowing, control flow (if/while/
+# loop/break/for), and inline `asm` declarations.
+#
+# Run:  make run FILE=examples/10_tour.ou
+# Out:  byte sum of "ABCD" = 266
+#       min(3, 7) = 3
+#       Box[i32].make(42).get() = 42
+#       parse_ok: 5
+#       parse_err (saw non-digit)
+#       hello from asm (life=42)
+#       Point { 3, 4 } dist^2 = 25
+#       dropping Counter(1)
+#       dropping Counter(2)
+#       dropping Counter(3)
+io = import("std/io")
+
+
+# ── Generic free function — duck-typed, monomorphized per call site.
+fn min[T](a: T, b: T) -> T:
+    if a < b: return a
+    return b
+
+
+# ── Inline assembly — a SystemV-compliant function that returns 42.
+asm forty_two() -> i32:
+    mov $42, %eax
+    ret
+
+
+# ── Struct with fields, a method, and a destructor.
+#    __drop__ fires at scope exit (ARC release → refcount-zero).
+struct Counter:
+    n: i32
+
+    fn __drop__(self):
+        io.printf("dropping Counter(%d)\n", self.n)
+
+
+# ── Generic struct — monomorphized per instantiation.
+struct Box[T]:
+    val: T
+
+    fn make(v: T) -> Self:
+        return Self { val: v }
+
+    fn get(self) -> T:
+        return self.val
+
+
+# ── 2D point + a method using bare `self` (default ptr[Self]).
+struct Point:
+    x: i32
+    y: i32
+
+    fn dist_sq(self) -> i32:
+        return self.x * self.x + self.y * self.y
+
+
+# ── Tagged-union return — the v1 error story.
+struct ParseError:
+    msg: []u8
+
+
+fn parse_first_digit(s: []u8) -> i32 | ParseError:
+    if s.len == 0:
+        return ParseError { msg: "empty input" }
+    b = s[0]
+    if b < 48u8 or b > 57u8:
+        return ParseError { msg: "needs a digit" }
+    return b - 48u8
+
+
+fn main() -> i32:
+    # ── for-loop over a slice (string is []u8); mutable accumulator.
+    text = "ABCD"
+    sum: var[i32] = 0
+    for b in text:
+        sum = sum + b
+    io.printf("byte sum of \"ABCD\" = %d\n", sum)
+
+    # ── generic fn at i32.
+    io.printf("min(3, 7) = %d\n", min(3, 7))
+
+    # ── generic struct instantiation.
+    b = Box[i32].make(42)
+    io.printf("Box[i32].make(42).get() = %d\n", b.get())
+
+    # ── tagged-union with ?= narrowing.
+    ok = parse_first_digit("5")
+    if ok ?= i32:
+        io.printf("parse_ok: %d\n", ok)
+
+    bad = parse_first_digit("x")
+    if bad ?= ParseError:
+        # We don't print bad.msg yet — passing a slice-typed struct
+        # field as a function argument is a known codegen gap.
+        io.println("parse_err (saw non-digit)")
+
+    # ── inline-asm function call.
+    io.printf("hello from asm (life=%d)\n", forty_two())
+
+    # ── struct method (bare `self`).
+    p = Point { x: 3, y: 4 }
+    io.printf("Point { 3, 4 } dist^2 = %d\n", p.dist_sq())
+
+    # ── __drop__ ordering — three stack-allocated Counters fire their
+    # __drop__ at scope exit in declaration order.  Bare `Counter`
+    # (no wrapper) → alloca; rc[T] / arc[T] would route through the
+    # refcounted heap path instead.
+    c1 = Counter { n: 1 }
+    c2 = Counter { n: 2 }
+    c3 = Counter { n: 3 }
+    return 0

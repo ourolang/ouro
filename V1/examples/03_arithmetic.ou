@@ -1,0 +1,26 @@
+# Numeric operators and io.printf for formatted output.
+#
+# `a = 6` is a const binding (inferred isize). For mutable state, use
+# `n: var[T]` — see the loop in 06_fizzbuzz.ou for an example.
+#
+# `io.printf` is a variadic intrinsic that lowers to libc printf.
+# Format specifiers follow C conventions: %ld for i64/isize, %d for i32.
+#
+# Run:  make run FILE=examples/03_arithmetic.ou
+# Out:  6 + 7 = 13
+#       6 * 7 = 42
+#       42 / 5 = 8 remainder 2
+
+io = import("std/io")
+
+fn main() -> i32:
+    a = 6
+    b = 7
+
+    io.printf("%ld + %ld = %ld\n", a, b, a + b)
+    io.printf("%ld * %ld = %ld\n", a, b, a * b)
+
+    product = a * b
+    io.printf("%ld / 5 = %ld remainder %ld\n", product, product / 5, product % 5)
+
+    return 0

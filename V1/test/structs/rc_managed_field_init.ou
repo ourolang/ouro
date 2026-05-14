@@ -1,0 +1,21 @@
+# A managed struct field initialized from a copy of an existing
+# reference: the codegen incs the source so both names hold a valid
+# rc.  The outer struct's auto-generated drop wrapper releases the
+# field when the outer struct's rc hits zero.
+io = import("std/io")
+
+struct Inner:
+    n: i32
+
+    fn __drop__(self):
+        io.printf("inner dropped %d\n", self.n)
+
+struct Outer:
+    inner: rc[Inner]
+
+fn main() -> i32:
+    a: rc[Inner] = Inner { n: 1 }
+    o: rc[Outer] = Outer { inner: a }
+    return 0
+    # release a → rc 2->1, no drop
+    # release o → rc 1->0, drop_wrapper → release o.inner (= a) → drop "inner dropped 1"

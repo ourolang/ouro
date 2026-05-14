@@ -1,0 +1,26 @@
+# Outer has BOTH a managed field AND a user-defined __drop__.
+# The auto-generated drop wrapper calls the user's __drop__ first
+# (so it can still observe field values), then releases each managed
+# field.
+io = import("std/io")
+
+struct Inner:
+    n: i32
+
+    fn __drop__(self):
+        io.printf("inner dropped %d\n", self.n)
+
+struct Outer:
+    inner: rc[Inner]
+
+    fn __drop__(self):
+        io.println("outer dropping")
+
+fn main() -> i32:
+    a: rc[Inner] = Inner { n: 1 }
+    o: rc[Outer] = Outer { inner: a }
+    return 0
+    # release a → rc 2->1
+    # release o → wrapper:
+    #   - calls user __drop__: prints "outer dropping"
+    #   - arc_release(o.inner) (=a) → rc 1->0 → "inner dropped 1"

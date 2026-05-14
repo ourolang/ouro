@@ -1,0 +1,7 @@
+io = import("std/io")
+
+fn main() -> i32:
+    io.print("a")
+    io.print("b")
+    io.print("c")
+    return 0

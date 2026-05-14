@@ -1,0 +1,35 @@
+{
+  "name": "ouro",
+  "displayName": "Ouro",
+  "description": "Syntax highlighting for the Ouro programming language (.ou)",
+  "version": "0.1.0",
+  "publisher": "ourolang",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "ouro",
+        "aliases": ["Ouro", "ouro"],
+        "extensions": [".ou"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ouro",
+        "scopeName": "source.ouro",
+        "path": "./syntaxes/ouro.tmLanguage.json"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ourolang/ouro.git",
+    "directory": "editor/vscode"
+  }
+}

@@ -1,0 +1,16 @@
+# `y = x` where x is a managed struct: arc_inc(x) bumps the refcount
+# so both names hold valid references.  At scope exit, both release;
+# __drop__ fires exactly once.
+io = import("std/io")
+
+struct R:
+    id: i32
+
+    fn __drop__(self):
+        io.println("dropped")
+
+fn main() -> i32:
+    a: rc[R] = R { id: 1 }
+    b: rc[R] = a            # copy binding — bumps rc to 2
+    return 0
+    # release a → rc=1, release b → rc=0 → __drop__ fires once

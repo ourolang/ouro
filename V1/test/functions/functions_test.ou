@@ -1,0 +1,53 @@
+# Function call mechanics: zero-arg, multi-arg, chained, recursive.
+test = import("std/test")
+
+
+fn _answer() -> i32:
+    return 42
+
+fn _add(a: i32, b: i32) -> i32:
+    return a + b
+
+fn _double(x: i32) -> i32:
+    return _add(x, x)
+
+fn _sum4(a: i32, b: i32, c: i32, d: i32) -> i32:
+    return a + b + c + d
+
+fn _fact(n: i64) -> i64:
+    if n <= 1:
+        return 1
+    return n * _fact(n - 1)
+
+fn _fib(n: i32) -> i32:
+    if n <= 1:
+        return n
+    return _fib(n - 1) + _fib(n - 2)
+
+
+fn test_no_args() -> rc[test.Outcome]:
+    return test.assert_eq_i32(_answer(), 42i32, "no-arg fn")
+
+fn test_many_args() -> rc[test.Outcome]:
+    return test.assert_eq_i32(_sum4(1, 2, 3, 4), 10i32, "sum4")
+
+fn test_chain_calls() -> rc[test.Outcome]:
+    return test.assert_eq_i32(_double(_add(3, 4)), 14i32, "double(add(3, 4))")
+
+fn test_recursion_factorial() -> rc[test.Outcome]:
+    if _fact(5) != 120i64:        return test.fail("5! != 120")
+    if _fact(10) != 3628800i64:   return test.fail("10! != 3628800")
+    return test.ok()
+
+fn test_recursion_fibonacci() -> rc[test.Outcome]:
+    return test.assert_eq_i32(_fib(10), 55i32, "fib(10)")
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("no_args",             test_no_args)
+    suite.add("many_args",           test_many_args)
+    suite.add("chain_calls",         test_chain_calls)
+    suite.add("recursion_factorial", test_recursion_factorial)
+    suite.add("recursion_fibonacci", test_recursion_fibonacci)
+    return suite.run()

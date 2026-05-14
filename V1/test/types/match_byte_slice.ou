@@ -1,0 +1,26 @@
+# Match arms with `[]u8` value patterns compare slice contents, not
+# fat-pointer addresses.  This is the pattern the lexer's keyword
+# table will use to replace the if-string.eq chain.
+fn classify(s: []u8) -> i32:
+    match s:
+        "if":     return 1
+        "else":   return 2
+        "while":  return 3
+        "":       return 4
+        _:        return 0
+
+fn main() -> i32:
+    if classify("if") != 1: return 1
+    if classify("else") != 2: return 2
+    if classify("while") != 3: return 3
+    if classify("") != 4: return 4
+    if classify("nope") != 0: return 5
+
+    # Two different `[]u8` slices holding the same bytes but
+    # different backing storage MUST compare equal.  (The bare
+    # identifier scrutinee with a literal pattern previously
+    # compared pointers; this is the regression guard.)
+    a = "if"
+    b = "if"
+    if classify(a) != classify(b): return 6
+    return 0

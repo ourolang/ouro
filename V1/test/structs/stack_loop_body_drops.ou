@@ -1,0 +1,16 @@
+# Each iteration's allocations release at end-of-iteration, not at
+# function exit.  Previously they would accumulate.
+io = import("std/io")
+
+struct R:
+    n: i32
+
+    fn __drop__(self):
+        io.printf("drop %d\n", self.n)
+
+fn main() -> i32:
+    i: var[i32] = 0
+    while i < 3:
+        r = R { n: i }   # stack — drops every iteration, no accumulation
+        i = i + 1
+    return 0

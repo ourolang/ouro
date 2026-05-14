@@ -1,0 +1,7 @@
+# Support file for basic_import.ou — imported via `./_helper`.
+# The `_` prefix tells the test runner this is not a standalone entry.
+fn double(x: i32) -> i32:
+    return x * 2
+
+fn add(a: i32, b: i32) -> i32:
+    return a + b

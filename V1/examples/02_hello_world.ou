@@ -1,0 +1,14 @@
+# Hello, World.
+#
+# `import("std/io")` binds the io module to a local name. The string
+# literal `"hello, ouro!"` is a `[]u8` (byte slice) — there is no
+# separate string type in Ouro.
+#
+# Run:  make run FILE=examples/02_hello_world.ou
+# Out:  hello, ouro!
+
+io = import("std/io")
+
+fn main() -> i32:
+    io.println("hello, ouro!")
+    return 0

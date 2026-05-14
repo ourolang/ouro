@@ -1,0 +1,42 @@
+# `std/diag`: severity enum + format / format_at into a Bytes
+# buffer.  Cross-module enum constructors (`diag.error_severity()`)
+# round-trip through the union-return boxing path.
+test   = import("std/test")
+bytes  = import("std/bytes")
+diag   = import("std/diag")
+string = import("std/string")
+
+
+fn test_format_at_error() -> rc[test.Outcome]:
+    buf: rc[bytes.Bytes] = bytes.Bytes.new()
+    diag.format_at(
+        buf,
+        diag.error_severity(),
+        "main.ou", 12u32, 7u32,
+        "unknown name 'foo'",
+    )
+    data = buf.data_ptr()
+    if not string.eq(
+        data[0..buf.len()],
+        "main.ou:12:7: error: unknown name 'foo'\n",
+    ):
+        return test.fail("formatted line mismatch")
+    return test.ok()
+
+fn test_format_unpositioned() -> rc[test.Outcome]:
+    buf: rc[bytes.Bytes] = bytes.Bytes.new()
+    diag.format(buf, diag.note_severity(), "compiled at <unknown>")
+    data = buf.data_ptr()
+    if not string.eq(
+        data[0..buf.len()],
+        "note: compiled at <unknown>\n",
+    ):
+        return test.fail("formatted line mismatch")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("format_at_error",      test_format_at_error)
+    suite.add("format_unpositioned",  test_format_unpositioned)
+    return suite.run()

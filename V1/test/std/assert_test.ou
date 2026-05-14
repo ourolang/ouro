@@ -1,0 +1,17 @@
+# `std/assert`: panicking checks.  A passing assertion is a no-op
+# (so the test program exits 0); a failing one would panic and
+# never return — outside the scope of return-code-style coverage.
+test   = import("std/test")
+assert = import("std/assert")
+
+
+fn test_assert_passing() -> rc[test.Outcome]:
+    assert.assert(2 + 2 == 4, "math is broken")
+    assert.assert(true, "tautology")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("passing", test_assert_passing)
+    return suite.run()

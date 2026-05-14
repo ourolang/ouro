@@ -1,0 +1,97 @@
+# Monomorphized generics: structs + free fns, single + multi type
+# params, nested instantiations, type-inference + explicit type args.
+# Stdout-matching tests (box_with_drop, holder_managed) stay
+# separate as their `.expected` siblings.
+test = import("std/test")
+
+
+struct Box[T]:
+    val: T
+
+    fn make(v: T) -> Self:
+        return Self { val: v }
+
+    fn get(self) -> T:
+        return self.val
+
+
+struct Pair[A, B]:
+    first: A
+    second: B
+
+    fn make(a: A, b: B) -> Self:
+        return Self { first: a, second: b }
+
+    fn sum(self) -> i32:
+        return self.first + self.second
+
+
+struct Wrap:
+    value: var[i32]
+
+
+fn _id[T](x: T) -> T:
+    return x
+
+fn _pick[A, B](a: A, b: B) -> A:
+    return a
+
+fn _first[T](a: T, b: T) -> T:
+    return a
+
+
+fn test_box_i32() -> rc[test.Outcome]:
+    b = Box[i32].make(42i32)
+    return test.assert_eq_i32(b.get(), 42i32, "Box[i32].get()")
+
+fn test_box_two_instantiations() -> rc[test.Outcome]:
+    bi = Box[i32].make(40i32)
+    bl = Box[i64].make(2i64)
+    s: i64 = (bi.get() as i64) + bl.get()
+    return test.assert_eq_i64(s, 42i64, "Box[i32]+Box[i64]")
+
+fn test_nested_box() -> rc[test.Outcome]:
+    inner = Box[i32].make(42i32)
+    outer = Box[Box[i32]].make(inner)
+    return test.assert_eq_i32(outer.get().get(), 42i32, "Box[Box[i32]]")
+
+fn test_id_fn() -> rc[test.Outcome]:
+    return test.assert_eq_i32(_id(42i32), 42i32, "id(42)")
+
+fn test_id_two_instantiations() -> rc[test.Outcome]:
+    a = _id(42i32)
+    b = _id(7i64)
+    if a != 42i32: return test.fail("id[i32]")
+    if b != 7i64:  return test.fail("id[i64]")
+    return test.ok()
+
+fn test_fn_explicit_typeargs() -> rc[test.Outcome]:
+    a = _id[i32](42i32)
+    return test.assert_eq_i32(a, 42i32, "id[i32](42) explicit")
+
+fn test_fn_two_params() -> rc[test.Outcome]:
+    r = _pick(42i32, 999i64)
+    return test.assert_eq_i32(r, 42i32, "pick(42, 999) → 42")
+
+fn test_fn_with_struct() -> rc[test.Outcome]:
+    w: arc[Wrap] = Wrap { value: 7 }
+    r: arc[Wrap] = _first(w, w)
+    return test.assert_eq_i32(r.value, 7i32, "_first(w, w).value")
+
+fn test_pair_two_params() -> rc[test.Outcome]:
+    p = Pair[i32, i32].make(3i32, 4i32)
+    return test.assert_eq_i32(p.sum(), 7i32, "Pair.sum")
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("box_i32",                test_box_i32)
+    suite.add("box_two_instantiations", test_box_two_instantiations)
+    suite.add("nested_box",             test_nested_box)
+    suite.add("id_fn",                  test_id_fn)
+    suite.add("id_two_instantiations",  test_id_two_instantiations)
+    suite.add("fn_explicit_typeargs",   test_fn_explicit_typeargs)
+    suite.add("fn_two_params",          test_fn_two_params)
+    suite.add("fn_with_struct",         test_fn_with_struct)
+    suite.add("pair_two_params",        test_pair_two_params)
+    return suite.run()

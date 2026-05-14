@@ -1,0 +1,24 @@
+# Top-down `?` inference: the LHS placeholders pick up the RHS's
+# concrete type args at binding time.
+map = import("std/map")
+
+fn main() -> i32:
+    # All `?` filled in from the RHS.
+    m: rc[map.HashMap[?, ?]] = map.HashMap[u64, i32].new()
+    m.put(1u64, 42)
+    a = m.get(1u64)
+    if a ?= Null:
+        return 1
+    elif a != 42:
+        return 2
+
+    # Mixed: one explicit, one ?
+    m2: rc[map.HashMap[u64, ?]] = map.HashMap[u64, i64].new()
+    m2.put(5u64, 99i64)
+    b = m2.get(5u64)
+    if b ?= Null:
+        return 3
+    elif b != 99i64:
+        return 4
+
+    return 0

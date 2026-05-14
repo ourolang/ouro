@@ -1,0 +1,41 @@
+# Basic numeric utilities.  Pure-Ouro, no runtime dependency.
+#
+# Generic over `T`: duck-typed in v1, so the body's operations
+# (`<`, `-`, ...) become the constraints — works for every signed
+# integer type, breaks at instantiation time for anything else
+# (e.g. unsigned widths reject the unary `-` in `abs`).  v2's
+# constraint syntax will make this contract explicit; for now the
+# docstring is it.
+#
+# Imported as `math = import("std/math")`.
+
+
+# Absolute value.  Negation of the most-negative value of a signed
+# type overflows — same caveat as C; the caller is responsible.
+fn abs[T](x: T) -> T:
+    if x < 0:
+        return -x
+    return x
+
+
+# Minimum / maximum of two values.
+fn min[T](a: T, b: T) -> T:
+    if a < b:
+        return a
+    return b
+
+
+fn max[T](a: T, b: T) -> T:
+    if a > b:
+        return a
+    return b
+
+
+# Clamp `x` to the closed interval `[lo, hi]`.  Undefined when
+# `hi < lo` — caller's responsibility (no contract assertion).
+fn clamp[T](x: T, lo: T, hi: T) -> T:
+    if x < lo:
+        return lo
+    if x > hi:
+        return hi
+    return x

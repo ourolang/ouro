@@ -1,0 +1,71 @@
+# `like[StructName]` alias-from form.  The bracket body is a single
+# type reference; the typechecker derives the shape from the named
+# struct's method set, drops the receiver, and substitutes generic
+# args.  The point of duck typing is that *any* type matching the
+# derived shape works — not just the named struct itself.  This test
+# defines an "interface" struct, then a *different* struct with
+# matching methods, and verifies the latter passes the constraint
+# and dispatches correctly.
+io = import("std/io")
+
+# The "interface" struct: its method set defines the shape.
+struct Counter:
+    n: i32
+
+    fn value(self) -> i32:
+        return self.n
+
+# A *different* struct that happens to expose the same `value()`
+# method.  Nothing relates `Tag` to `Counter` except the shape.
+struct Tag:
+    label: i32
+
+    fn value(self) -> i32:
+        return self.label + 1000i32
+
+# `c: like[Counter]` — derived from Counter's method set.  Lifts to
+# an implicit generic at the typechecker level; the body's `c.value()`
+# resolves against the concrete arg type at monomorphization, and
+# the return type is recovered from the LikeTy constraint.
+fn read(c: like[Counter]) -> i32:
+    return c.value()
+
+struct Pair[T]:
+    a: T
+    b: T
+
+    fn first(self) -> T:
+        return self.a
+
+# A separate struct mirroring `Pair[i32]`'s `first() -> i32` shape
+# after subst T → i32.
+struct Box32:
+    v: i32
+
+    fn first(self) -> i32:
+        return self.v + 100i32
+
+fn take_first(p: like[Pair[i32]]) -> i32:
+    return p.first()
+
+fn main() -> i32:
+    # Counter itself satisfies its own shape.
+    c = Counter { n: 42i32 }
+    if read(c) != 42i32:
+        return 1
+
+    # Tag satisfies `like[Counter]` despite being unrelated.
+    t = Tag { label: 7i32 }
+    if read(t) != 1007i32:
+        return 2
+
+    # Generic case: Pair[i32] satisfies its own shape.
+    p = Pair[i32] { a: 5i32, b: 6i32 }
+    if take_first(p) != 5i32:
+        return 3
+
+    # Box32 satisfies `like[Pair[i32]]` after subst T → i32.
+    b = Box32 { v: 7i32 }
+    if take_first(b) != 107i32:
+        return 4
+    return 0

@@ -1,0 +1,98 @@
+# ARC primitives (non-atomic v1) — refcount + drop_fn + weak slot.
+# Auto-loaded as a runtime module; symbols emit bare so the codegen's
+# direct calls (`call $arc_alloc(...)`, etc.) link without a prefix.
+#
+# Heap layout (24-byte header before the user pointer):
+#   offset -24..-16 : weak refcount   (i64)
+#   offset -16..-8  : strong refcount (i64)
+#   offset  -8..0   : drop_fn         (8-byte fn ptr; 0 = no drop)
+#   offset   0...   : user data
+#
+# `arc_alloc` returns the user pointer.  Strong refs keep the user
+# data alive; weak refs keep the *block* (header + dead/zeroed
+# data) alive but don't extend the user data's lifetime.
+# `weak_upgrade` succeeds while strong > 0.
+#
+# Globals are not yet supported at module scope, but ARC doesn't
+# need any — every counter / drop_fn lives in the allocation's
+# own header.
+
+extern mem_alloc(size: usize) -> ptr[u8]
+extern mem_free(p: ptr[u8])
+
+
+# Type alias for clarity in signatures.
+DropFn: type = fn(ptr[u8])
+
+
+fn arc_alloc(size: i64, drop_fn: DropFn) -> ptr[u8]:
+    block = mem_alloc(24 + size as usize)
+    if (block as i64) == 0:
+        return 0 as ptr[u8]
+    user = ((block as i64) + 24) as ptr[u8]
+    mem_store[i64](user, -24 as usize, 0)   # weak count
+    mem_store[i64](user, -16 as usize, 1)   # strong count = 1
+    mem_store[DropFn](user, -8 as usize, drop_fn)
+    return user
+
+
+fn arc_inc(user_ptr: ptr[u8]):
+    if (user_ptr as i64) == 0:
+        return
+    strong = mem_load[i64](user_ptr, -16 as usize)
+    mem_store[i64](user_ptr, -16 as usize, strong + 1)
+
+
+fn arc_release(user_ptr: ptr[u8]):
+    if (user_ptr as i64) == 0:
+        return
+    strong = mem_load[i64](user_ptr, -16 as usize)
+    new_strong = strong - 1
+    mem_store[i64](user_ptr, -16 as usize, new_strong)
+    if new_strong > 0:
+        return
+    # Strong refs hit zero — run the drop_fn if any.
+    drop_fn = mem_load[DropFn](user_ptr, -8 as usize)
+    if (drop_fn as i64) != 0:
+        drop_fn(user_ptr)
+    # If no weak refs remain either, free the whole block.
+    weak = mem_load[i64](user_ptr, -24 as usize)
+    if weak == 0:
+        block = ((user_ptr as i64) - 24) as ptr[u8]
+        mem_free(block)
+
+
+fn weak_inc(user_ptr: ptr[u8]):
+    if (user_ptr as i64) == 0:
+        return
+    weak = mem_load[i64](user_ptr, -24 as usize)
+    mem_store[i64](user_ptr, -24 as usize, weak + 1)
+
+
+fn weak_release(user_ptr: ptr[u8]):
+    if (user_ptr as i64) == 0:
+        return
+    weak = mem_load[i64](user_ptr, -24 as usize)
+    new_weak = weak - 1
+    mem_store[i64](user_ptr, -24 as usize, new_weak)
+    if new_weak > 0:
+        return
+    # No weak refs.  If strong is also zero, the user data has
+    # already been dropped — free the block now.
+    strong = mem_load[i64](user_ptr, -16 as usize)
+    if strong == 0:
+        block = ((user_ptr as i64) - 24) as ptr[u8]
+        mem_free(block)
+
+
+# Try to acquire a strong ref from a weak handle.  Returns the
+# user pointer (with strong bumped) if the referent is still
+# alive, or 0 if it's been dropped.
+fn weak_upgrade(user_ptr: ptr[u8]) -> ptr[u8]:
+    if (user_ptr as i64) == 0:
+        return 0 as ptr[u8]
+    strong = mem_load[i64](user_ptr, -16 as usize)
+    if strong > 0:
+        mem_store[i64](user_ptr, -16 as usize, strong + 1)
+        return user_ptr
+    return 0 as ptr[u8]

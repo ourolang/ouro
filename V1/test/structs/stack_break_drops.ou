@@ -1,0 +1,20 @@
+# `break` releases everything allocated in the loop body's scope
+# before jumping past the loop.  Without scope-tracking, the
+# pre-break allocation would leak.
+io = import("std/io")
+
+struct R:
+    n: i32
+
+    fn __drop__(self):
+        io.printf("drop %d\n", self.n)
+
+fn main() -> i32:
+    i: var[i32] = 0
+    while true:
+        r = R { n: i }   # stack; drops on body exit AND on break
+        if i >= 2:
+            break
+        i = i + 1
+    io.println("after")
+    return 0

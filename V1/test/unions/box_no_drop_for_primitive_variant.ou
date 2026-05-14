@@ -1,0 +1,19 @@
+# When the inhabited variant is a primitive (not managed), releasing
+# the union box must NOT try to arc_release the integer-as-pointer
+# (that would crash on a non-pointer value).
+io = import("std/io")
+
+struct E:
+    code: i32
+
+    fn __drop__(self):
+        io.println("E dropped")    # must NOT fire — i32 was returned
+
+fn produce() -> i32 | E:
+    return 99   # value variant; tag=1 (numeric > "E" lexicographically)
+
+fn main() -> i32:
+    r = produce()
+    # r's box is released here; the drop_fn checks the tag, sees it's
+    # not a managed variant, and is a no-op.  No output expected.
+    return 0

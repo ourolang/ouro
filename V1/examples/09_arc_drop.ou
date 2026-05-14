@@ -1,0 +1,31 @@
+# ARC + __drop__: deterministic cleanup at scope end.
+#
+# Every heap-allocated struct carries a refcount and a drop_fn pointer
+# (the 16-byte ARC header). When the refcount hits zero, the runtime
+# invokes drop_fn — which the codegen wires to the struct's `__drop__`
+# method if one is defined.
+#
+# In `main`, `a` and `b` are both managed locals. Before the implicit
+# `return 0`, the codegen emits `arc_release` for each, in registration
+# order. So you see "before" / "after" first, then the two drop lines.
+#
+# Run:  make run FILE=examples/09_arc_drop.ou
+# Out:  before
+#       after
+#       releasing resource 1
+#       releasing resource 2
+
+io = import("std/io")
+
+struct Resource:
+    id: i32
+
+    fn __drop__(self):
+        io.printf("releasing resource %d\n", self.id)
+
+fn main() -> i32:
+    io.println("before")
+    a = Resource { id: 1 }
+    b = Resource { id: 2 }
+    io.println("after")
+    return 0

@@ -1,0 +1,32 @@
+# `std/math`: abs / min / max / clamp.  All generic across i32/i64;
+# each call site picks a fresh specialization.
+test = import("std/test")
+math = import("std/math")
+
+
+fn test_abs() -> rc[test.Outcome]:
+    if math.abs(-7i32) != 7i32: return test.fail("abs(-7i32)")
+    if math.abs(7i32) != 7i32:  return test.fail("abs(7i32)")
+    if math.abs(-5i64) != 5i64: return test.fail("abs(-5i64)")
+    return test.ok()
+
+fn test_min_max() -> rc[test.Outcome]:
+    if math.min(3i32, 5i32) != 3i32:   return test.fail("min(3, 5)")
+    if math.max(3i32, 5i32) != 5i32:   return test.fail("max(3, 5)")
+    if math.min(10i64, 4i64) != 4i64:  return test.fail("min(10i64, 4i64)")
+    if math.max(10i64, 4i64) != 10i64: return test.fail("max(10i64, 4i64)")
+    return test.ok()
+
+fn test_clamp() -> rc[test.Outcome]:
+    if math.clamp(0i32, 1i32, 9i32) != 1i32:  return test.fail("clamp lo")
+    if math.clamp(5i32, 1i32, 9i32) != 5i32:  return test.fail("clamp mid")
+    if math.clamp(99i32, 1i32, 9i32) != 9i32: return test.fail("clamp hi")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("abs",     test_abs)
+    suite.add("min_max", test_min_max)
+    suite.add("clamp",   test_clamp)
+    return suite.run()

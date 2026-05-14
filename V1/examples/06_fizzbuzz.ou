@@ -1,0 +1,38 @@
+# FizzBuzz — the classic combination of loop, modulo, and if/elif/else.
+#
+# Note that the multiples-of-15 case must come first; otherwise either
+# `n % 3 == 0` or `n % 5 == 0` would match a multiple-of-15 and we'd
+# never reach the combined message.
+#
+# Run:  make run FILE=examples/06_fizzbuzz.ou
+# Out:  1
+#       2
+#       Fizz
+#       4
+#       Buzz
+#       Fizz
+#       7
+#       8
+#       Fizz
+#       Buzz
+#       11
+#       Fizz
+#       13
+#       14
+#       FizzBuzz
+
+io = import("std/io")
+
+fn main() -> i32:
+    n: var[i32] = 1
+    while n <= 15:
+        if n % 15 == 0:
+            io.println("FizzBuzz")
+        elif n % 3 == 0:
+            io.println("Fizz")
+        elif n % 5 == 0:
+            io.println("Buzz")
+        else:
+            io.printf("%d\n", n)
+        n = n + 1
+    return 0

@@ -1,0 +1,133 @@
+# Generic open-addressing hash table.  Key and value types are both
+# fully generic; the table dispatches hash and equality through the
+# `hash[T]` / `eq[T]` comptime intrinsics, which specialize per K
+# at codegen time.  No fn-pointer plumbing in the user-facing API.
+#
+# Imported as `map = import("std/map")`.
+#
+# Built-in `hash[K]` / `eq[K]` cover:
+#   - integer / bool / byte primitives + ptr[T] (Knuth multiplicative)
+#   - `[]u8` slices (FNV-1a)
+#   - any struct that defines `__hash__(self) -> u64`
+#     and `__eq__(self, other: Self) -> bool`
+#
+# v1 limitations:
+#   - Buckets are three parallel buffers (keys / values / used).
+#   - Load factor exceeding 50% triggers a rehash into a doubled
+#     bucket array.
+#   - No remove yet.  Managed values get `drop_at[V]` at table drop.
+bytes = import("std/bytes")
+
+
+struct HashMap[K, V]:
+    _keys: var[ptr[u8]]      # cap × sizeof(K)
+    _vals: var[ptr[u8]]      # cap × sizeof(V)
+    _used: var[ptr[u8]]      # cap × sizeof(bool)
+    _cap: var[usize]
+    _len: var[usize]
+
+    fn new() -> rc[Self]:
+        return Self {
+            _keys: 0, _vals: 0, _used: 0,
+            _cap: 0, _len: 0,
+        }
+
+    fn len(self) -> usize:
+        return self._len
+
+    # Insert or overwrite `k → v`.  Grows when load factor crosses
+    # 50% so lookups stay O(1) amortised.
+    fn put(self: ptr[var[Self]], k: K, v: V):
+        if (self._len + 1) * 2 > self._cap:
+            self._grow()
+        i: var[usize] = (hash[K](k) as usize) % self._cap
+        while true:
+            used = mem_load[bool](self._used, i * sizeof[bool]())
+            if not used:
+                mem_store[K](self._keys, i * sizeof[K](), k)
+                mem_store[V](self._vals, i * sizeof[V](), v)
+                mem_store[bool](self._used, i * sizeof[bool](), true)
+                self._len = self._len + 1
+                return
+            existing = mem_load[K](self._keys, i * sizeof[K]())
+            if eq[K](existing, k):
+                mem_store[V](self._vals, i * sizeof[V](), v)
+                return
+            i = (i + 1) % self._cap
+
+    fn get(self, k: K) -> V | Null:
+        if self._cap == 0:
+            return Null {}
+        i: var[usize] = (hash[K](k) as usize) % self._cap
+        n: var[usize] = 0
+        while n < self._cap:
+            used = mem_load[bool](self._used, i * sizeof[bool]())
+            if not used:
+                return Null {}
+            existing = mem_load[K](self._keys, i * sizeof[K]())
+            if eq[K](existing, k):
+                return mem_load[V](self._vals, i * sizeof[V]())
+            i = (i + 1) % self._cap
+            n = n + 1
+        return Null {}
+
+    fn contains(self, k: K) -> bool:
+        r = self.get(k)
+        if r ?= Null:
+            return false
+        return true
+
+    # Indexing-sugar dunders.  `m[k]` desugars to `__getitem__`, mirroring
+    # `get`'s `V | Null` shape (callers narrow with `?=`).  `m[k] = v`
+    # desugars to `__setitem__`, mirroring `put` (insert-or-overwrite).
+    fn __getitem__(self, k: K) -> V | Null:
+        return self.get(k)
+
+    fn __setitem__(self: ptr[var[Self]], k: K, v: V):
+        self.put(k, v)
+
+    fn _grow(self: ptr[var[Self]]):
+        new_cap: var[usize] = self._cap * 2
+        if new_cap < 8:
+            new_cap = 8
+        new_keys = bytes.mem_alloc(new_cap * sizeof[K]())
+        new_vals = bytes.mem_alloc(new_cap * sizeof[V]())
+        new_used = bytes.mem_alloc(new_cap * sizeof[bool]())
+        # mem_alloc may hand back a recycled block whose bytes still
+        # read as `true` from a prior table.  Without this zeroing,
+        # the new table sees ghost-occupied buckets and either drops
+        # inserts on probe-wrap or, worse, treats stale keys as
+        # matches.  No general-purpose zeroing helper in v1, so loop.
+        for j in 0..new_cap:
+            mem_store[bool](new_used, j * sizeof[bool](), false)
+        old_keys = self._keys
+        old_vals = self._vals
+        old_used = self._used
+        old_cap = self._cap
+
+        self._keys = new_keys
+        self._vals = new_vals
+        self._used = new_used
+        self._cap = new_cap
+        self._len = 0
+
+        if old_cap > 0:
+            for j in 0..old_cap:
+                used = mem_load[bool](old_used, j * sizeof[bool]())
+                if used:
+                    k = mem_load[K](old_keys, j * sizeof[K]())
+                    v = mem_load[V](old_vals, j * sizeof[V]())
+                    self.put(k, v)
+            bytes.mem_free(old_keys)
+            bytes.mem_free(old_vals)
+            bytes.mem_free(old_used)
+
+    fn __drop__(self):
+        if self._cap > 0:
+            for i in 0..self._cap:
+                used = mem_load[bool](self._used, i * sizeof[bool]())
+                if used:
+                    drop_at[V](self._vals, i * sizeof[V]())
+            bytes.mem_free(self._keys)
+            bytes.mem_free(self._vals)
+            bytes.mem_free(self._used)

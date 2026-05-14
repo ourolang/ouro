@@ -1,0 +1,81 @@
+# Linux x86_64 syscall wrappers.
+#
+# SystemV passes the first six integer args in %rdi/%rsi/%rdx/%rcx/
+# %r8/%r9 and returns in %rax — same registers the syscall ABI uses,
+# *except* that the 4th syscall arg goes in %r10 (not %rcx).  So
+# any wrapper with 4+ args has to move %rcx → %r10 first.
+#
+# These bodies preserve no callee-save registers because they only
+# touch caller-save ones (and %rax/%r10 which the kernel clobbers
+# anyway).  No prologue is needed.
+#
+# Runtime files emit bare symbols, so `sys_write` here links as
+# `$sys_write` — same name the C runtime previously exposed.
+
+
+# write(fd, buf, len) — syscall 1.
+asm sys_write(fd: i32, buf: ptr[u8], len: usize) -> i64:
+    mov $1, %rax
+    syscall
+    ret
+
+
+# exit(code) — syscall 60.  Never returns in practice; the missing
+# `ret` instruction makes this clear at the asm level.  v1 doesn't
+# have a `never` type yet, so the Ouro return type is omitted (unit).
+asm sys_exit(code: i32):
+    mov $60, %rax
+    syscall
+
+
+# mmap(NULL, len, PROT_READ|WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)
+#   — syscall 9.  Convenience wrapper for the allocator: only takes
+#   the length, hardwires the rest.
+#
+# `len` arrives in %rdi (SystemV arg 1); the syscall wants:
+#   %rdi = addr (NULL),  %rsi = len,           %rdx = prot (3),
+#   %r10 = flags (0x22), %r8  = fd (-1),       %r9  = offset (0).
+# So we shuffle %rdi → %rsi first, then zero %rdi.
+asm sys_mmap_anon(len: usize) -> ptr[u8]:
+    mov %rdi, %rsi
+    xor %rdi, %rdi
+    mov $3, %rdx
+    mov $0x22, %r10
+    mov $-1, %r8
+    xor %r9, %r9
+    mov $9, %rax
+    syscall
+    ret
+
+
+# read(fd, buf, count) — syscall 0.  Returns bytes read, or -errno
+# on failure (a negative value).
+asm sys_read(fd: i32, buf: ptr[u8], count: usize) -> i64:
+    xor %rax, %rax
+    syscall
+    ret
+
+
+# open(path, flags) — syscall 2.  Returns fd or -errno.  `path` is
+# a NUL-terminated C string (string literals in the data section
+# already have a trailing `b 0`, so `"foo".ptr` works as-is).
+asm sys_open(path: ptr[u8], flags: i32) -> i32:
+    xor %rdx, %rdx
+    mov $2, %rax
+    syscall
+    ret
+
+
+# close(fd) — syscall 3.  Returns 0 or -errno.
+asm sys_close(fd: i32) -> i32:
+    mov $3, %rax
+    syscall
+    ret
+
+
+# lseek(fd, offset, whence) — syscall 8.  Returns the new offset
+# or -errno.  `whence`: 0=SET, 1=CUR, 2=END.
+asm sys_lseek(fd: i32, offset: i64, whence: i32) -> i64:
+    mov $8, %rax
+    syscall
+    ret

@@ -1,0 +1,26 @@
+# `Value` — a heterogeneous container for reflection-style code.
+# Used by compiler-synthesized `__get__` and `__set__` to expose a
+# struct's fields by name without committing to a specific field-
+# type set per struct.  Each numeric primitive keeps its own variant
+# so a round-trip preserves width — i32 doesn't widen to i64, u8
+# stays u8.
+#
+# v1 keeps the variant set flat (no `Struct(map)` recursion) because
+# the type-alias machinery doesn't yet express self-referential
+# aliases.  Nested struct fields will be added once that lands.
+
+Value: type = i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | isize | usize | f32 | f64 | bool | []u8 | Null
+
+# `to_map(obj)` — generic snapshot to a `HashMap` — is sketched but
+# not yet shipped: v1 can't substitute method-call return types
+# through `obj: T` during generic-fn spec emission, so the binding
+# for `obj.__fields__()` reads as UNKNOWN and the body drops the
+# call result.  Build the map by hand for now (works in any module
+# that imports `std/map` and `std/value`):
+#
+#     map = import("std/map")
+#     value = import("std/value")
+#     ...
+#     m = map.HashMap[[]u8, value.Value].new()
+#     for name in obj.__fields__():
+#         m.put(name, obj.__get__(name))

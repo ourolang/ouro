@@ -1,0 +1,24 @@
+# Process-aborting checks.  These are the only stdlib functions
+# allowed to kill the process; everything else returns a tagged
+# union.
+#
+# Imported as `assert = import("std/assert")`.
+io = import("std/io")
+syscalls = import("./runtime/syscalls")
+
+
+# Unconditional abort.  Writes `msg` (plus a newline) to stderr and
+# exits with status 1.  v1 has no `never` return type, so the
+# return annotation is omitted (treated as unit) — but in practice
+# this function does not return.
+fn panic(msg: []u8):
+    io.eprintln(msg)
+    syscalls.sys_exit(1)
+
+
+# Abort with `msg` iff `cond` is false; otherwise return.  The
+# message is only built when the check actually fires, so the cost
+# of a passing assertion is one branch.
+fn assert(cond: bool, msg: []u8):
+    if not cond:
+        panic(msg)

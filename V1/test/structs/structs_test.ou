@@ -1,0 +1,174 @@
+# Struct mechanics: fields, methods, var fields, inline composition,
+# stack vs heap, rc/arc/ptr coercions.  The 15 `*.ou.expected`-paired
+# struct tests stay separate (they verify __drop__ ordering through
+# stdout match) plus map_uint64.ou which exercises std/map.
+test = import("std/test")
+
+
+struct Empty:
+    pass
+
+struct One:
+    x: i32
+
+struct Point:
+    x: i32
+    y: i32
+
+struct PointMut:
+    x: var[i32]
+    y: var[i32]
+
+struct CounterField:
+    count: var[i32]
+
+struct CounterInc:
+    count: var[i32]
+
+    fn inc(self: ptr[var[Self]]):
+        self.count = self.count + 1
+
+struct BoxGet:
+    val: i32
+
+    fn get_val(self) -> i32:
+        return self.val
+
+struct BoxMake:
+    val: i32
+
+    fn make(v: i32) -> Self:
+        return Self { val: v }
+
+struct Inner:
+    v: i32
+
+struct Outer:
+    a: i32
+    b: Inner
+
+struct PointRC:
+    x: i32
+    y: i32
+
+struct BoxN:
+    n: i32
+
+
+fn _read_x(p: ptr[PointRC]) -> i32:
+    return p.x
+
+fn _translate(p: ptr[PointMut], dx: i32, dy: i32):
+    p.x = p.x + dx
+    p.y = p.y + dy
+
+fn _sum_point(p: PointRC) -> i32:
+    return p.x + p.y
+
+fn _make_point_rc(a: i32, b: i32) -> PointRC:
+    return PointRC { x: a, y: b }
+
+
+fn test_empty_struct() -> rc[test.Outcome]:
+    e = Empty {}
+    return test.ok()
+
+fn test_single_field() -> rc[test.Outcome]:
+    o = One { x: 7i32 }
+    return test.assert_eq_i32(o.x, 7i32, "One.x")
+
+fn test_multi_field() -> rc[test.Outcome]:
+    p = Point { x: 3i32, y: 4i32 }
+    if p.x != 3i32: return test.fail("p.x")
+    if p.y != 4i32: return test.fail("p.y")
+    return test.ok()
+
+fn test_field_write_var() -> rc[test.Outcome]:
+    c = CounterField { count: 0i32 }
+    c.count = 5i32
+    if c.count != 5i32: return test.fail("after =5")
+    c.count = c.count + 10i32
+    if c.count != 15i32: return test.fail("+=10")
+    return test.ok()
+
+fn test_inline_field() -> rc[test.Outcome]:
+    o = Outer { a: 10i32, b: Inner { v: 32i32 } }
+    if o.a != 10i32: return test.fail("a")
+    if o.b.v != 32i32: return test.fail("b.v")
+    if o.a + o.b.v != 42i32: return test.fail("a + b.v")
+    return test.ok()
+
+fn test_method_mutating() -> rc[test.Outcome]:
+    c = CounterInc { count: 0i32 }
+    c.inc()
+    c.inc()
+    c.inc()
+    return test.assert_eq_i32(c.count, 3i32, "after 3 inc()")
+
+fn test_method_with_self() -> rc[test.Outcome]:
+    b = BoxGet { val: 42i32 }
+    return test.assert_eq_i32(b.get_val(), 42i32, "get_val")
+
+fn test_static_method() -> rc[test.Outcome]:
+    b = BoxMake.make(42i32)
+    return test.assert_eq_i32(b.val, 42i32, "Self ctor")
+
+fn test_var_struct_reassign() -> rc[test.Outcome]:
+    p: var[Point] = Point { x: 1i32, y: 2i32 }
+    p = Point { x: 10i32, y: 32i32 }
+    if p.x != 10i32: return test.fail("x after reassign")
+    if p.y != 32i32: return test.fail("y after reassign")
+    return test.ok()
+
+fn test_ptr_from_rc() -> rc[test.Outcome]:
+    p: rc[PointRC] = PointRC { x: 42i32, y: 7i32 }
+    addr: ptr[PointRC] = p
+    return test.assert_eq_i32(_read_x(addr), 42i32, "ptr from rc")
+
+fn test_ptr_from_stack() -> rc[test.Outcome]:
+    p: var[PointMut] = PointMut { x: 1i32, y: 2i32 }
+    addr: ptr[PointMut] = p
+    _translate(addr, 9i32, 30i32)
+    if p.x != 10i32: return test.fail("x")
+    if p.y != 32i32: return test.fail("y")
+    return test.ok()
+
+fn test_rc_arc_annotations() -> rc[test.Outcome]:
+    a = BoxN { n: 7i32 }
+    b: rc[BoxN] = BoxN { n: 13i32 }
+    c: arc[BoxN] = BoxN { n: 22i32 }
+    return test.assert_eq_i32(a.n + b.n + c.n, 42i32, "rc/arc field sum")
+
+fn test_stack_arg() -> rc[test.Outcome]:
+    p = PointRC { x: 7i32, y: 35i32 }
+    return test.assert_eq_i32(_sum_point(p), 42i32, "by-value arg")
+
+fn test_stack_return() -> rc[test.Outcome]:
+    p = _make_point_rc(3i32, 4i32)
+    if p.x != 3i32: return test.fail("p.x")
+    if p.y != 4i32: return test.fail("p.y")
+    return test.ok()
+
+fn test_stack_to_ptr_arg() -> rc[test.Outcome]:
+    p = PointRC { x: 42i32, y: 7i32 }
+    return test.assert_eq_i32(_read_x(p), 42i32, "stack arg → ptr param")
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("empty_struct",        test_empty_struct)
+    suite.add("single_field",        test_single_field)
+    suite.add("multi_field",         test_multi_field)
+    suite.add("field_write_var",     test_field_write_var)
+    suite.add("inline_field",        test_inline_field)
+    suite.add("method_mutating",     test_method_mutating)
+    suite.add("method_with_self",    test_method_with_self)
+    suite.add("static_method",       test_static_method)
+    suite.add("var_struct_reassign", test_var_struct_reassign)
+    suite.add("ptr_from_rc",         test_ptr_from_rc)
+    suite.add("ptr_from_stack",      test_ptr_from_stack)
+    suite.add("rc_arc_annotations",  test_rc_arc_annotations)
+    suite.add("stack_arg",           test_stack_arg)
+    suite.add("stack_return",        test_stack_return)
+    suite.add("stack_to_ptr_arg",    test_stack_to_ptr_arg)
+    return suite.run()

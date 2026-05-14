@@ -1,0 +1,14 @@
+# Two stack-allocated locals; their __drop__s fire at scope exit
+# in declaration order — no refcount machinery involved.
+io = import("std/io")
+
+struct R:
+    id: i32
+
+    fn __drop__(self):
+        io.println("d")
+
+fn main() -> i32:
+    a = R { id: 1 }
+    b = R { id: 2 }
+    return 0

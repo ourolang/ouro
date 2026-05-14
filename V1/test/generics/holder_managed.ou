@@ -1,0 +1,20 @@
+# Generic holding a managed (struct) field — the specialization's
+# drop wrapper releases the contained field at the right time.
+io = import("std/io")
+
+struct R:
+    n: i32
+
+    fn __drop__(self):
+        io.printf("R %d dropped\n", self.n)
+
+struct Holder[T]:
+    contents: T
+
+    fn make(c: T) -> rc[Self]:
+        return Self { contents: c }
+
+fn main() -> i32:
+    r: rc[R] = R { n: 5 }
+    h: rc[Holder[rc[R]]] = Holder[rc[R]].make(r)
+    return 0

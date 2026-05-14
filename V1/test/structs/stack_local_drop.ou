@@ -1,0 +1,13 @@
+# A bare-struct binding lives on the stack; its `__drop__` runs at
+# scope exit via a direct call (no refcount, no `arc_alloc`).
+io = import("std/io")
+
+struct Resource:
+    id: i32
+
+    fn __drop__(self):
+        io.println("dropped")
+
+fn main() -> i32:
+    r = Resource { id: 42 }   # stack — no aliasing, no shared ownership
+    return 0

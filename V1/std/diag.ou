@@ -1,0 +1,93 @@
+# Diagnostic formatting.  Used by the (eventual) self-hosted
+# bootstrap to print messages with the conventional
+# `<file>:<line>:<col>: <severity>: <msg>` shape.
+#
+# Imported as `diag = import("std/diag")`.
+#
+# v1 surface is flat-fn rather than struct-based: cross-module field
+# access doesn't see the source module's struct layout, so callers
+# can't read `.line`/`.col` from a Span constructed in this module.
+# Working around that with accessor methods would just reinvent
+# positional args — so we pass span fields directly.
+
+bytes = import("std/bytes")
+syscalls = import("./runtime/syscalls")
+
+
+enum Severity:
+    Error
+    Warning
+    Note
+
+
+# Constructor fns for each severity variant.  Going through a fn
+# return engages the union-return boxing path; constructing the
+# variant value at the call site directly would skip the tag and
+# leave the consumer's `match` reading garbage at offset 0.
+fn error_severity() -> Severity:
+    return Severity.Error
+
+fn warning_severity() -> Severity:
+    return Severity.Warning
+
+fn note_severity() -> Severity:
+    return Severity.Note
+
+
+# Append the ASCII label ("error" / "warning" / "note") for a
+# severity to `out`.  Inlined where used — returning a `[]u8` slice
+# by value doesn't survive the callee's stack frame in v1.
+fn push_severity(out: rc[bytes.Bytes], s: Severity):
+    match s:
+        _: Severity.Error: out.push_bytes("error")
+        _: Severity.Warning: out.push_bytes("warning")
+        _: Severity.Note: out.push_bytes("note")
+
+
+# Append a positioned diagnostic line to `out`:
+#   <file>:<line>:<col>: <severity>: <msg>\n
+fn format_at(
+    out: rc[bytes.Bytes],
+    severity: Severity,
+    file: []u8,
+    line: u32, col: u32,
+    msg: []u8,
+):
+    out.push_bytes(file)
+    out.push(58u8)                  # ':'
+    out.push_uint(line as u64)
+    out.push(58u8)
+    out.push_uint(col as u64)
+    out.push_bytes(": ")
+    push_severity(out, severity)
+    out.push_bytes(": ")
+    out.push_bytes(msg)
+    out.push(10u8)                  # '\n'
+
+
+# Append an un-positioned diagnostic line:
+#   <severity>: <msg>\n
+fn format(out: rc[bytes.Bytes], severity: Severity, msg: []u8):
+    push_severity(out, severity)
+    out.push_bytes(": ")
+    out.push_bytes(msg)
+    out.push(10u8)
+
+
+# Write a positioned diagnostic to stderr.
+fn emit_at(
+    severity: Severity,
+    file: []u8,
+    line: u32, col: u32,
+    msg: []u8,
+):
+    buf: rc[bytes.Bytes] = bytes.Bytes.new()
+    format_at(buf, severity, file, line, col, msg)
+    syscalls.sys_write(2, buf.data_ptr(), buf.len())
+
+
+# Write an un-positioned diagnostic to stderr.
+fn emit(severity: Severity, msg: []u8):
+    buf: rc[bytes.Bytes] = bytes.Bytes.new()
+    format(buf, severity, msg)
+    syscalls.sys_write(2, buf.data_ptr(), buf.len())

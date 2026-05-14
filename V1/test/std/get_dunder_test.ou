@@ -1,0 +1,78 @@
+# Compiler-synthesized `__get__(self, name: []u8) -> value.Value` —
+# present on every struct in modules that import `std/value`.  The
+# body dispatches by field name and returns the field's value boxed
+# as a Value variant; unsupported fields (non-primitive, non-[]u8,
+# non-Null) fall through to the wildcard arm and return Null.  A
+# user-defined `__get__` always wins, mirroring the override rule for
+# other lifecycle dunders.
+test  = import("std/test")
+value = import("std/value")
+
+
+struct Mixed:
+    n: i32
+    flag: bool
+    name: []u8
+
+
+fn test_synth_int() -> rc[test.Outcome]:
+    m = Mixed { n: 42i32, flag: true, name: "alpha" }
+    v = m.__get__("n")
+    if v ?= i32:
+        return test.assert_eq_i32(v, 42i32, "n via __get__")
+    return test.fail("n narrow failed")
+
+
+fn test_synth_bool() -> rc[test.Outcome]:
+    m = Mixed { n: 0i32, flag: true, name: "x" }
+    v = m.__get__("flag")
+    if v ?= bool:
+        if v:
+            return test.ok()
+        return test.fail("flag narrowed wrong")
+    return test.fail("flag narrow failed")
+
+
+fn test_synth_slice() -> rc[test.Outcome]:
+    m = Mixed { n: 0i32, flag: false, name: "world" }
+    v = m.__get__("name")
+    if v ?= []u8:
+        if v.len == 5:
+            return test.ok()
+        return test.fail("slice length")
+    return test.fail("slice narrow failed")
+
+
+fn test_synth_unknown() -> rc[test.Outcome]:
+    m = Mixed { n: 0i32, flag: false, name: "" }
+    v = m.__get__("missing")
+    if v ?= Null:
+        return test.ok()
+    return test.fail("missing should narrow to Null")
+
+
+# User-defined __get__ — compiler synthesis must back off when the
+# struct already declares one.
+struct Override:
+    a: i32
+
+    fn __get__(self, name: []u8) -> value.Value:
+        return 999i32
+
+
+fn test_user_override_wins() -> rc[test.Outcome]:
+    o = Override { a: 1i32 }
+    v = o.__get__("anything")
+    if v ?= i32:
+        return test.assert_eq_i32(v, 999i32, "user override returns 999")
+    return test.fail("override narrow failed")
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("synth_int",     test_synth_int)
+    suite.add("synth_bool",    test_synth_bool)
+    suite.add("synth_slice",   test_synth_slice)
+    suite.add("synth_unknown", test_synth_unknown)
+    suite.add("user_override", test_user_override_wins)
+    return suite.run()

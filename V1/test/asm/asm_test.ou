@@ -1,0 +1,52 @@
+# `asm` decl coverage.  Smoke-tests the asm sidecar path end-to-end:
+# lexer → parser → resolver → typechecker → codegen sidecar → linker.
+test = import("std/test")
+
+
+asm forty_two() -> i32:
+    mov $42, %eax
+    ret
+
+
+# An asm fn that uses its arguments — verifies SystemV reg-passing.
+asm add_asm(a: i64, b: i64) -> i64:
+    mov %rdi, %rax
+    add %rsi, %rax
+    ret
+
+
+# Multiple asm decls in one file.  Verifies sidecar emission handles
+# more than one decl.
+asm one() -> i32:
+    mov $1, %eax
+    ret
+
+asm two() -> i32:
+    mov $2, %eax
+    ret
+
+asm three() -> i32:
+    mov $3, %eax
+    ret
+
+
+fn test_return_constant() -> rc[test.Outcome]:
+    return test.assert_eq_i32(forty_two(), 42i32, "asm return constant")
+
+fn test_asm_args() -> rc[test.Outcome]:
+    if add_asm(40i64, 2i64) != 42i64: return test.fail("40 + 2")
+    if add_asm(100i64, -58i64) != 42i64: return test.fail("100 + -58")
+    return test.ok()
+
+fn test_multiple_decls() -> rc[test.Outcome]:
+    return test.assert_eq_i32(
+        one() + two() + three() - 6i32, 0i32, "1 + 2 + 3 == 6",
+    )
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("return_constant", test_return_constant)
+    suite.add("asm_args",        test_asm_args)
+    suite.add("multiple_decls",  test_multiple_decls)
+    return suite.run()

@@ -1,0 +1,28 @@
+# A struct with an instance method.
+#
+# `Point` has two immutable i32 fields and a method that reads them via
+# bare `self`. Bare `self` desugars to `self: ptr[Self]` — a read-only
+# pointer. For methods that *mutate* fields, see 08_counter.ou.
+#
+# The struct is heap-allocated with a 16-byte ARC header (refcount +
+# drop_fn); the codegen emits an `arc_release` for `p` before main
+# returns, freeing it.
+#
+# Run:  make run FILE=examples/07_point.ou
+# Out:  p = (3, 4)
+#       |p|^2 = 25
+
+io = import("std/io")
+
+struct Point:
+    x: i32
+    y: i32
+
+    fn distance_sq(self) -> i32:
+        return self.x * self.x + self.y * self.y
+
+fn main() -> i32:
+    p = Point { x: 3, y: 4 }
+    io.printf("p = (%d, %d)\n", p.x, p.y)
+    io.printf("|p|^2 = %d\n", p.distance_sq())
+    return 0

@@ -1,0 +1,19 @@
+# Releasing a union box invokes its per-union drop_fn, which arc_releases
+# the boxed payload when the tag points at a managed variant.  The
+# struct's __drop__ should fire.
+io = import("std/io")
+
+struct E:
+    code: i32
+
+    fn __drop__(self):
+        io.println("E dropped")
+
+fn produce() -> i32 | E:
+    return E { code: 7 }
+
+fn main() -> i32:
+    r = produce()
+    # On main's exit, r (the union box) is arc_released; its drop_fn
+    # tag-dispatches and arc_releases the boxed E; E's __drop__ runs.
+    return 0

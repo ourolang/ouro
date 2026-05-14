@@ -1,0 +1,30 @@
+# `like[...]` shape constraint via a generic type alias.  The fn
+# parameter `it: Iter[i32]` lifts to an implicit generic at the
+# typechecker level, and existing duck-typed monomorphization
+# specializes `take` per concrete iter type passed.
+io = import("std/io")
+
+Iter[T]: type = like[
+    __next__() -> T | Null,
+]
+
+struct Counter:
+    n: var[i32]
+
+    fn next(self: ptr[var[Self]]) -> i32:
+        v = self.n
+        self.n = self.n + 1
+        return v
+
+# v1 doesn't enforce the shape — the body doesn't read methods on
+# `it`, so this just verifies the signature typechecks and the call
+# specializes on the concrete arg type.
+fn take(it: Iter[i32]) -> i32:
+    return 7
+
+fn main() -> i32:
+    c = Counter { n: 0 }
+    r = take(c)
+    if r != 7:
+        return 1
+    return 0

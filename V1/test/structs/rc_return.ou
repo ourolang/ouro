@@ -1,0 +1,16 @@
+# Returning a struct transfers ownership: only the caller's release fires.
+io = import("std/io")
+
+struct Box:
+    val: i32
+
+    fn __drop__(self):
+        io.println("dropped")
+
+fn make_box() -> rc[Box]:
+    b: rc[Box] = Box { val: 7 }
+    return b
+
+fn main() -> i32:
+    x: rc[Box] = make_box()
+    return 0

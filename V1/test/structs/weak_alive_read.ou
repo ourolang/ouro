@@ -1,0 +1,21 @@
+# weak[T] field whose referent is still alive — reading produces the
+# value variant of the `T | Null` union.  Verifies the ?= goes
+# into the value branch.
+io = import("std/io")
+
+struct Node:
+    name: i32
+
+    fn __drop__(self):
+        io.printf("dropped %d\n", self.name)
+
+struct Watcher:
+    target: weak[Node]
+
+fn main() -> i32:
+    n: rc[Node] = Node { name: 7 }
+    w: rc[Watcher] = Watcher { target: n }
+    r = w.target
+    if r ?= Null:
+        return 1   # would mean weak read returned null while referent is alive
+    return 0

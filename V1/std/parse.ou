@@ -1,0 +1,54 @@
+# Parse byte-strings into integers.  Pure functions, no heap; every
+# fallible call returns the value-or-`ParseError` union.
+#
+# Imported as `parse = import("std/parse")`.
+
+
+# Failure detail for every fallible call in this module.
+#
+# `pos` is the byte offset of the first character that caused the
+# parse to fail (0 for "empty input", `s.len` for "input ran out
+# mid-number").  v1 callers usually only branch on the type via
+# `?=`; the fields are there for richer error reporting later.
+struct ParseError:
+    pos: usize
+
+
+# Parse a signed integer.  Accepts an optional leading `-`, then
+# one or more ASCII decimal digits, then nothing else.  No leading
+# `+`, no underscores, no whitespace, no overflow detection (the
+# unsigned helper wraps on i64::MIN — same caveat as C's strtoll).
+fn parse_int(s: []u8) -> i64 | ParseError:
+    if s.len == 0:
+        return ParseError { pos: 0 }
+    start: var[usize] = 0
+    negative: var[bool] = false
+    if s[0] == 45:  # '-'
+        negative = true
+        start = 1
+        if s.len == 1:
+            return ParseError { pos: 1 }
+    n: var[i64] = 0
+    for i in start..s.len:
+        b = s[i]
+        if b < 48 or b > 57:
+            return ParseError { pos: i }
+        n = n * 10 + (b - 48)
+    if negative:
+        return -n
+    return n
+
+
+# Parse an unsigned integer.  Same grammar as `parse_int` minus the
+# sign — empty input or any non-digit byte fails with the byte's
+# offset.  No overflow detection in v1.
+fn parse_uint(s: []u8) -> u64 | ParseError:
+    if s.len == 0:
+        return ParseError { pos: 0 }
+    n: var[u64] = 0
+    for i in 0..s.len:
+        b = s[i]
+        if b < 48 or b > 57:
+            return ParseError { pos: i }
+        n = n * 10 + (b - 48)
+    return n

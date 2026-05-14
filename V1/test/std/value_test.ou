@@ -1,0 +1,71 @@
+# `std/value.Value` — a flat union over every numeric primitive plus
+# `bool`, `[]u8`, and `Null`.  Used by the (forthcoming) compiler-
+# synthesized `__get__` reflection dunder.  This test exercises the
+# round-trip: assign each variant kind, narrow it back with `?=`, and
+# verify the recovered value matches.  Also confirms that cross-module
+# type-alias expansion preserves variant ordering — without that, the
+# producer's tag and the consumer's tag would disagree and every
+# narrow would miss.
+test  = import("std/test")
+value = import("std/value")
+
+
+fn test_i32_round_trip() -> rc[test.Outcome]:
+    v: value.Value = 42i32
+    if v ?= i32:
+        return test.assert_eq_i32(v, 42i32, "i32 round-trip")
+    return test.fail("i32 narrow failed")
+
+
+fn test_u8_round_trip() -> rc[test.Outcome]:
+    v: value.Value = 7u8
+    if v ?= u8:
+        return test.assert_eq_i32(v as i32, 7i32, "u8 round-trip")
+    return test.fail("u8 narrow failed")
+
+
+fn test_bool_round_trip() -> rc[test.Outcome]:
+    v: value.Value = true
+    if v ?= bool:
+        if v:
+            return test.ok()
+        return test.fail("bool true narrowed wrong")
+    return test.fail("bool narrow failed")
+
+
+fn test_slice_round_trip() -> rc[test.Outcome]:
+    v: value.Value = "hello"
+    if v ?= []u8:
+        if v.len == 5:
+            return test.ok()
+        return test.fail("slice length mismatch")
+    return test.fail("slice narrow failed")
+
+
+fn test_null_default() -> rc[test.Outcome]:
+    v: value.Value = Null {}
+    if v ?= Null:
+        return test.ok()
+    return test.fail("null narrow failed")
+
+
+# Param-shaped variant of the round-trip — exercises the call-site
+# auto-box path that wraps the arg into the Value union shape.
+fn echo_i32(v: value.Value) -> i32:
+    if v ?= i32:
+        return v
+    return -1
+
+fn test_param_auto_box() -> rc[test.Outcome]:
+    return test.assert_eq_i32(echo_i32(99i32), 99i32, "auto-box at call")
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("i32_round_trip",   test_i32_round_trip)
+    suite.add("u8_round_trip",    test_u8_round_trip)
+    suite.add("bool_round_trip",  test_bool_round_trip)
+    suite.add("slice_round_trip", test_slice_round_trip)
+    suite.add("null_default",     test_null_default)
+    suite.add("param_auto_box",   test_param_auto_box)
+    return suite.run()

@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Cancel older runs on the same ref when a new commit lands.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Cache QBE binary
+        id: cache-qbe
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/qbe
+          key: qbe-1.2-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build QBE (only on cache miss)
+        if: steps.cache-qbe.outputs.cache-hit != 'true'
+        run: |
+          curl -sL https://c9x.me/compile/release/qbe-1.2.tar.xz -o /tmp/qbe.tar.xz
+          tar -xf /tmp/qbe.tar.xz -C /tmp
+          make -C /tmp/qbe-1.2 -j"$(nproc)"
+          mkdir -p "$HOME/.local/bin"
+          cp /tmp/qbe-1.2/qbe "$HOME/.local/bin/"
+
+      - name: Make QBE available
+        run: |
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/qbe" -h || true
+
+      - name: Install dependencies
+        run: make -C bootstrap sync
+
+      - name: Lint
+        run: make -C bootstrap lint
+
+      - name: Type check
+        run: make -C bootstrap ty
+
+      - name: Python tests
+        run: make -C bootstrap test-py
+
+      - name: Ouro tests
+        run: make -C bootstrap test-ouro

@@ -1,0 +1,25 @@
+# Cross-module imports: same-directory `./helper` and `./geom`
+# style.  Helper modules retain their `_` prefix so the test runner
+# skips them as standalone entries.
+test   = import("std/test")
+helper = import("./_helper")
+geom   = import("./_geom")
+
+
+fn test_basic_import() -> rc[test.Outcome]:
+    if helper.double(21) != 42i32: return test.fail("double(21)")
+    if helper.add(40, 2) != 42i32:  return test.fail("add(40, 2)")
+    return test.ok()
+
+fn test_multi_module_geom() -> rc[test.Outcome]:
+    if geom.square_area(5i64) != 25i64:        return test.fail("square 5")
+    if geom.rect_area(4i64, 7i64) != 28i64:    return test.fail("rect 4x7")
+    if geom.rect_perimeter(3i64, 6i64) != 18i64: return test.fail("perim 3,6")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("basic_import",      test_basic_import)
+    suite.add("multi_module_geom", test_multi_module_geom)
+    return suite.run()

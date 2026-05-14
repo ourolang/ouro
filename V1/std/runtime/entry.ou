@@ -1,0 +1,19 @@
+# Process entry point.
+#
+# The kernel jumps here with the stack pointing at argc, not at a
+# return address — so the function can't have a normal prologue.
+# The body zeroes %rbp (end of frame chain), calls the user's
+# `main` (Ouro emits it as an exported `$main` symbol returning
+# i32 in %eax), then invokes the Linux x86_64 `exit` syscall
+# (rax=60) with main's return code in %edi.
+#
+# Runtime files live under runtime/ and emit bare symbols by
+# convention, so the asm decl below shows up in the final binary as
+# the bare `_start` symbol (the linker's default entry) regardless
+# of this file's name.
+asm _start():
+    xor %rbp, %rbp
+    call main
+    mov %eax, %edi
+    mov $60, %eax
+    syscall

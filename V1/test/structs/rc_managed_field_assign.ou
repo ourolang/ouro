@@ -1,0 +1,22 @@
+# Assigning to a managed struct field releases the previous contents
+# and incs the new value (when it's a copy of an existing reference).
+io = import("std/io")
+
+struct Inner:
+    n: i32
+
+    fn __drop__(self):
+        io.printf("inner dropped %d\n", self.n)
+
+struct Outer:
+    inner: var[rc[Inner]]
+
+fn main() -> i32:
+    a: rc[Inner] = Inner { n: 1 }
+    b: rc[Inner] = Inner { n: 2 }
+    o: rc[Outer] = Outer { inner: a }   # inc a (rc 1->2)
+    o.inner = b                          # release a (rc 2->1), inc b (rc 1->2)
+    return 0
+    # release a → rc 1->0, drop "inner dropped 1"
+    # release b → rc 2->1, no drop
+    # release o → drop_wrapper → release o.inner (= b) → drop "inner dropped 2"

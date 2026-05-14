@@ -1,0 +1,108 @@
+# Byte-string utilities over `[]u8` slices.  Pure functions, no
+# heap, no error type — every operation either returns a bool or a
+# signed index (`-1` for "not found").  v1 has no `String` type;
+# `[]u8` is the only string in town.
+#
+# Imported as `string = import("std/string")`.
+
+
+# Byte-wise equality.  Two slices are equal iff they have the same
+# length and every byte matches.
+fn eq(a: []u8, b: []u8) -> bool:
+    if a.len != b.len:
+        return false
+    for i in 0..a.len:
+        if a[i] != b[i]:
+            return false
+    return true
+
+
+# True iff `s` begins with `prefix`.
+fn starts_with(s: []u8, prefix: []u8) -> bool:
+    if prefix.len > s.len:
+        return false
+    for i in 0..prefix.len:
+        if s[i] != prefix[i]:
+            return false
+    return true
+
+
+# True iff `s` ends with `suffix`.
+fn ends_with(s: []u8, suffix: []u8) -> bool:
+    if suffix.len > s.len:
+        return false
+    offset = s.len - suffix.len
+    for i in 0..suffix.len:
+        if s[offset + i] != suffix[i]:
+            return false
+    return true
+
+
+# First byte-offset where `needle` occurs in `s`, or `-1` if not
+# found.  Naïve O(n*m) scan — fine for the short strings v1
+# programs deal with; a Boyer-Moore variant lands when something
+# actually needs it.
+fn index_of(s: []u8, needle: []u8) -> i64:
+    if needle.len > s.len:
+        return -1
+    if needle.len == 0:
+        return 0
+    last = s.len - needle.len
+    i: var[i64] = 0
+    while i <= last:
+        matched: var[bool] = true
+        for j in 0..needle.len:
+            if s[i + j] != needle[j]:
+                matched = false
+                break
+        if matched:
+            return i
+        i = i + 1
+    return -1
+
+
+# Convenience wrapper over `index_of`.
+fn contains(s: []u8, needle: []u8) -> bool:
+    return index_of(s, needle) >= 0
+
+
+# FNV-1a 64-bit hash.  Used by `std/map`'s `HashMap[[]u8, V]` and
+# anywhere else a stable cross-run hash is wanted.  Not
+# cryptographic — sufficient for in-process bucketing.
+fn hash(s: []u8) -> u64:
+    h: var[u64] = 14695981039346656037u64    # FNV offset basis
+    for i in 0..s.len:
+        h = h ^ (s[i] as u64)
+        h = h * 1099511628211u64              # FNV prime
+    return h
+
+
+# True iff `b` is an ASCII whitespace byte: space, tab, LF, CR, FF, VT.
+fn is_space(b: u8) -> bool:
+    return b == 32 or b == 9 or b == 10 or b == 13 or b == 12 or b == 11
+
+
+# First non-whitespace byte index, or s.len if all whitespace.
+fn trim_start(s: []u8) -> usize:
+    i: var[usize] = 0
+    while i < s.len and is_space(s[i]):
+        i = i + 1
+    return i
+
+
+# One past the last non-whitespace byte index, or 0 if all whitespace.
+fn trim_end(s: []u8) -> usize:
+    i: var[usize] = s.len
+    while i > 0 and is_space(s[i - 1]):
+        i = i - 1
+    return i
+
+
+# Find the first occurrence of byte `b` in `s`, or `-1`.
+fn index_of_byte(s: []u8, b: u8) -> i64:
+    i: var[usize] = 0
+    while i < s.len:
+        if s[i] == b:
+            return i as i64
+        i = i + 1
+    return -1

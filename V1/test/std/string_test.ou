@@ -1,0 +1,76 @@
+# `std/string`: byte-slice utilities — eq / starts_with / ends_with
+# / index_of / contains / index_of_byte / is_space / trim_* / hash.
+test   = import("std/test")
+string = import("std/string")
+
+
+fn test_eq() -> rc[test.Outcome]:
+    if not string.eq("abc", "abc"):  return test.fail("same")
+    if string.eq("abc", "abcd"):     return test.fail("diff len")
+    if string.eq("abc", "abd"):      return test.fail("diff bytes")
+    return test.ok()
+
+fn test_starts_with() -> rc[test.Outcome]:
+    if not string.starts_with("hello world", "hello"): return test.fail("prefix")
+    if string.starts_with("hello", "hellos"):          return test.fail("longer")
+    if not string.starts_with("", ""):                 return test.fail("empty")
+    if not string.starts_with("anything", ""):         return test.fail("empty prefix")
+    return test.ok()
+
+fn test_ends_with() -> rc[test.Outcome]:
+    if not string.ends_with("hello world", "world"):   return test.fail("suffix")
+    if string.ends_with("world", "ohello world"):      return test.fail("longer")
+    if not string.ends_with("anything", ""):           return test.fail("empty suffix")
+    return test.ok()
+
+fn test_index_of() -> rc[test.Outcome]:
+    if string.index_of("hello world", "world") != 6:   return test.fail("found")
+    if string.index_of("hello", "x") != -1:            return test.fail("miss")
+    if string.index_of("", "x") != -1:                 return test.fail("empty src")
+    if string.index_of("abc", "") != 0:                return test.fail("empty needle")
+    return test.ok()
+
+fn test_contains() -> rc[test.Outcome]:
+    if not string.contains("hello world", "lo wo"):    return test.fail("found")
+    if string.contains("hello", "xyz"):                return test.fail("miss")
+    return test.ok()
+
+fn test_index_of_byte() -> rc[test.Outcome]:
+    if string.index_of_byte("hello", 108u8) != 2:      return test.fail("'l'")
+    if string.index_of_byte("hello", 122u8) != -1:     return test.fail("'z' miss")
+    return test.ok()
+
+fn test_is_space() -> rc[test.Outcome]:
+    if not string.is_space(32u8): return test.fail("' '")
+    if not string.is_space(10u8): return test.fail("'\\n'")
+    if string.is_space(65u8):     return test.fail("'A'")
+    return test.ok()
+
+fn test_trim_bounds() -> rc[test.Outcome]:
+    if string.trim_start("   hi   ") != 3: return test.fail("trim_start")
+    if string.trim_end("   hi   ") != 5:   return test.fail("trim_end")
+    if string.trim_start("   ") != 3:      return test.fail("all-ws trim_start")
+    if string.trim_end("   ") != 0:        return test.fail("all-ws trim_end")
+    return test.ok()
+
+fn test_hash_determinism() -> rc[test.Outcome]:
+    h1 = string.hash("foo")
+    h2 = string.hash("foo")
+    h3 = string.hash("bar")
+    if h1 != h2: return test.fail("same bytes ⇒ same hash")
+    if h1 == h3: return test.fail("'foo' vs 'bar' collide")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("eq",            test_eq)
+    suite.add("starts_with",   test_starts_with)
+    suite.add("ends_with",     test_ends_with)
+    suite.add("index_of",      test_index_of)
+    suite.add("contains",      test_contains)
+    suite.add("index_of_byte", test_index_of_byte)
+    suite.add("is_space",      test_is_space)
+    suite.add("trim_bounds",   test_trim_bounds)
+    suite.add("hash",          test_hash_determinism)
+    return suite.run()

@@ -1,0 +1,37 @@
+# Comptime `hash[T]` / `eq[T]` intrinsics — both as `hash[T](v)` /
+# `eq[T](a, b)` and the bare `hash(v)` / `eq(a, b)` form where T
+# is inferred from the arg.
+test = import("std/test")
+
+
+fn test_hash_u64() -> rc[test.Outcome]:
+    if hash(0u64) != 0u64:    return test.fail("hash(0u64)")
+    if hash(1u64) == 0u64:    return test.fail("hash(1u64) collides with 0")
+    if hash(1u64) == hash(2u64): return test.fail("h(1) == h(2)")
+    return test.ok()
+
+fn test_eq_int() -> rc[test.Outcome]:
+    if not eq(42i32, 42i32): return test.fail("eq(42, 42)")
+    if eq(1i32, 2i32):       return test.fail("eq(1, 2)")
+    return test.ok()
+
+fn test_eq_bytes() -> rc[test.Outcome]:
+    if not eq("hi", "hi"):    return test.fail("eq('hi', 'hi')")
+    if eq("hi", "bye"):       return test.fail("eq('hi', 'bye')")
+    return test.ok()
+
+fn test_explicit_brackets() -> rc[test.Outcome]:
+    if hash[u64](7u64) != hash(7u64):
+        return test.fail("bracket vs bare differ")
+    if not eq[i32](5i32, 5i32):
+        return test.fail("eq[i32] failed")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("hash_u64",          test_hash_u64)
+    suite.add("eq_int",            test_eq_int)
+    suite.add("eq_bytes",          test_eq_bytes)
+    suite.add("explicit_brackets", test_explicit_brackets)
+    return suite.run()

@@ -1,0 +1,21 @@
+# Re-assigning a var slot that holds a managed value releases the old
+# contents AND incs the new one (if the new is a copy of an existing
+# reference).  Verifying via __drop__ side effects in order.
+io = import("std/io")
+
+struct R:
+    id: i32
+
+    fn __drop__(self):
+        io.printf("dropped %d\n", self.id)
+
+fn main() -> i32:
+    a: rc[R] = R { id: 1 }
+    b: rc[R] = R { id: 2 }
+    slot: var[rc[R]] = R { id: 3 }
+    slot = a   # release 3; inc a (rc 1->2)
+    slot = b   # release a (rc 2->1, no drop); inc b (rc 1->2)
+    return 0
+    # release a (rc 1->0, drop "dropped 1")
+    # release b (rc 2->1, no drop)
+    # release slot's value (b, rc 1->0, drop "dropped 2")

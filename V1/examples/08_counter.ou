@@ -1,0 +1,29 @@
+# A struct with a mutating method.
+#
+# Two ingredients:
+#   1. The field is wrapped in `var[T]` to mark it mutable.
+#   2. The method's receiver is `self: ptr[var[Self]]` — a pointer to
+#      a mutable view of Self. The default bare `self` (= ptr[Self])
+#      doesn't allow writes.
+#
+# Run:  make run FILE=examples/08_counter.ou
+# Out:  count = 3
+
+io = import("std/io")
+
+struct Counter:
+    count: var[i32]
+
+    fn inc(self: ptr[var[Self]]):
+        self.count = self.count + 1
+
+    fn get(self) -> i32:
+        return self.count
+
+fn main() -> i32:
+    c = Counter { count: 0 }
+    c.inc()
+    c.inc()
+    c.inc()
+    io.printf("count = %d\n", c.get())
+    return 0

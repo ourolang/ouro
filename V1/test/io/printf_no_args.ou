@@ -1,0 +1,5 @@
+io = import("std/io")
+
+fn main() -> i32:
+    io.printf("hello\n")
+    return 0

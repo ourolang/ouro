@@ -1,0 +1,31 @@
+# `wrapper[?]` — the inner `?` picks up the *entire* RHS type, wrappers
+# and all.  `var[?] = map.HashMap[..].new()` lands at
+# `var[rc[HashMap[..]]]` rather than peeling the rc off.  The two
+# wrappers are orthogonal (var = storage mutability, rc = lifetime),
+# so peeling would silently strip the lifecycle contract.
+map = import("std/map")
+vec = import("std/vec")
+
+fn main() -> i32:
+    # Map case — value access through indexing sugar verifies the
+    # inferred type still carries the rc wrapper (otherwise method
+    # dispatch would fail).
+    m: var[?] = map.HashMap[u64, i32].new()
+    m[7u64] = 42i32
+    a = m[7u64]
+    if a ?= Null:
+        return 1
+    elif a != 42i32:
+        return 2
+
+    # Vec case.
+    v: var[?] = vec.Vec[i32].new()
+    v.push(11i32)
+    v.push(22i32)
+    b = v[1u64]
+    if b ?= Null:
+        return 3
+    elif b != 22i32:
+        return 4
+
+    return 0

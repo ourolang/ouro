@@ -1,0 +1,33 @@
+# Narrow-through-`and` for `Name` TypeTests.  The classic 2-step
+# pattern collapses into one condition: `if x ?= T and pred(x)`
+# typechecks `pred(x)` against the narrowed type, and at runtime
+# the bitwise AND still gives the right answer (since x's payload
+# read returns the field value when the tag matches).  Else-branch
+# narrowing is intentionally NOT applied for and-chains — `NOT (a
+# and b)` isn't a single-name complement.
+
+fn main() -> i32:
+    v: i32 | Null = 11i32
+
+    # Plain narrow + value compare in one condition.
+    if v ?= i32 and v == 11i32:
+        if v != 11i32:
+            return 1
+    else:
+        return 2
+
+    # Negative inner predicate: narrow succeeds, predicate fails.
+    if v ?= i32 and v == 99i32:
+        return 3
+
+    # Narrow fails first: predicate isn't load-bearing — bitwise AND
+    # still returns 0, branch not taken.
+    w: i32 | Null = Null {}
+    if w ?= i32 and w == 11i32:
+        return 4
+
+    # Multi-step and chain: still works.
+    if v ?= i32 and v != 0i32 and v < 20i32:
+        return 0
+
+    return 5

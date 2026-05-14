@@ -1,0 +1,39 @@
+# Binding-form coverage: const, typed, var, var[?], `_` discard.
+test = import("std/test")
+
+
+fn test_const_binding() -> rc[test.Outcome]:
+    x = 42
+    return test.assert_eq_i64(x, 42i64, "inferred const")
+
+fn test_typed_binding() -> rc[test.Outcome]:
+    x: i32 = 7
+    return test.assert_eq_i32(x, 7i32, "typed const")
+
+fn test_var_binding() -> rc[test.Outcome]:
+    n: var[i32] = 10
+    if n != 10i32: return test.fail("initial value")
+    n = 20i32
+    return test.assert_eq_i32(n, 20i32, "after reassign")
+
+fn test_var_infer() -> rc[test.Outcome]:
+    # `var[?]` — inner type inferred from RHS.
+    n: var[?] = 5
+    n = n + 1
+    n = n * 2
+    return test.assert_eq_i64(n, 12i64, "5 → +1 → *2")
+
+fn test_discard() -> rc[test.Outcome]:
+    _ = 42
+    _ = 100 + 200
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("const_binding", test_const_binding)
+    suite.add("typed_binding", test_typed_binding)
+    suite.add("var_binding",   test_var_binding)
+    suite.add("var_infer",     test_var_infer)
+    suite.add("discard",       test_discard)
+    return suite.run()

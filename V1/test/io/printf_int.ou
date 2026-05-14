@@ -1,0 +1,5 @@
+io = import("std/io")
+
+fn main() -> i32:
+    io.printf("%ld\n", 2 + 2 * 20)
+    return 0

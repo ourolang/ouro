@@ -1,0 +1,64 @@
+# `__getitem__` / `__setitem__` dunders: any struct that defines them
+# gets `obj[k]` and `obj[k] = v` for free.  Exercised here against
+# `std/map.HashMap` and `std/vec.Vec` — both expose the dunders as
+# wrappers around their `get`/`put`/`push` APIs.
+test = import("std/test")
+map  = import("std/map")
+vec  = import("std/vec")
+
+
+fn test_map_index_read() -> rc[test.Outcome]:
+    m: rc[map.HashMap[[]u8, i32]] = map.HashMap[[]u8, i32].new()
+    m.put("a", 1i32)
+    m.put("b", 2i32)
+    v = m["a"]
+    if v ?= Null:
+        return test.fail("a missing")
+    elif v != 1i32:
+        return test.fail("a != 1")
+    miss = m["zzz"]
+    if not (miss ?= Null):
+        return test.fail("missing key should narrow to Null")
+    return test.ok()
+
+
+fn test_map_index_write() -> rc[test.Outcome]:
+    m: rc[map.HashMap[u64, i32]] = map.HashMap[u64, i32].new()
+    m[10u64] = 100i32
+    m[20u64] = 200i32
+    m[10u64] = 999i32        # overwrite
+    if m.len() != 2:
+        return test.fail("len after writes")
+    a = m[10u64]
+    if a ?= Null:
+        return test.fail("10 missing after write")
+    elif a != 999i32:
+        return test.fail("overwrite via m[10] didn't take")
+    return test.ok()
+
+
+fn test_vec_index() -> rc[test.Outcome]:
+    v: rc[vec.Vec[i32]] = vec.Vec[i32].new()
+    v.push(10i32)
+    v.push(20i32)
+    v.push(30i32)
+    a = v[0u64]
+    if a ?= Null:
+        return test.fail("v[0] missing")
+    elif a != 10i32:
+        return test.fail("v[0] != 10")
+    v[1u64] = 99i32          # write in-bounds
+    b = v[1u64]
+    if b ?= Null:
+        return test.fail("v[1] missing after write")
+    elif b != 99i32:
+        return test.fail("v[1] write didn't take")
+    return test.ok()
+
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("map_index_read",  test_map_index_read)
+    suite.add("map_index_write", test_map_index_write)
+    suite.add("vec_index",       test_vec_index)
+    return suite.run()

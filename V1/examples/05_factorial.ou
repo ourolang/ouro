@@ -1,0 +1,29 @@
+# Recursion.
+#
+# `fact` recurses on i64 to avoid overflowing 10! = 3,628,800 (fits in
+# i32, but 13! does not). Note `%ld\n` in the format string matches an
+# i64 / isize value.
+#
+# Run:  make run FILE=examples/05_factorial.ou
+# Out:  1! = 1
+#       2! = 2
+#       3! = 6
+#       4! = 24
+#       5! = 120
+#       6! = 720
+#       7! = 5040
+
+io = import("std/io")
+
+fn fact(n: i64) -> i64:
+    if n <= 1:
+        return 1
+    return n * fact(n - 1)
+
+fn main() -> i32:
+    n: var[i64] = 1
+    loop:
+        if n > 7: break
+        io.printf("%ld! = %ld\n", n, fact(n))
+        n = n + 1
+    return 0

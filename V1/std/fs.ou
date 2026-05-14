@@ -1,0 +1,47 @@
+# Filesystem operations.  v1 ships exactly one entry: read an
+# entire file into a `Bytes` buffer.  Open/read/close go through
+# raw Linux x86_64 syscalls; the buffer is sized in one
+# `lseek(SEEK_END)` + `lseek(SEEK_SET)` round-trip so we read
+# everything in one syscall.
+#
+# Imported as `fs = import("std/fs")`.
+syscalls = import("./runtime/syscalls")
+bytes = import("std/bytes")
+
+
+# `errno` is the positive Linux errno value (the kernel returns
+# negative on failure; we flip the sign before constructing).
+struct IoError:
+    errno: i32
+
+
+# Read the entire file at `path` (a NUL-terminated C string —
+# string literals work as-is via `"foo".ptr`).  Returns the file
+# contents on success, or `IoError` on any syscall failure.
+#
+# Layout: `Bytes` takes ownership of the freshly-allocated
+# buffer; freeing happens in its `__drop__`.
+fn read_file(path: ptr[u8]) -> rc[bytes.Bytes] | IoError:
+    fd = syscalls.sys_open(path, 0)   # O_RDONLY = 0
+    if fd < 0:
+        return IoError { errno: -fd }
+
+    # Size the file via lseek(fd, 0, SEEK_END), then rewind.
+    size = syscalls.sys_lseek(fd, 0, 2)
+    if size < 0:
+        syscalls.sys_close(fd)
+        return IoError { errno: -size }
+    rewound = syscalls.sys_lseek(fd, 0, 0)
+    if rewound < 0:
+        syscalls.sys_close(fd)
+        return IoError { errno: -rewound }
+
+    buf = bytes.mem_alloc(size)
+    n_read = syscalls.sys_read(fd, buf, size)
+    if n_read < 0:
+        bytes.mem_free(buf)
+        syscalls.sys_close(fd)
+        return IoError { errno: -n_read }
+
+    syscalls.sys_close(fd)
+    return bytes.Bytes.from_buffer(buf, n_read, size)

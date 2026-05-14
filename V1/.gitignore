@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[oc]
+*.pyd
+build/
+dist/
+wheels/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+
+# uv
+.python-version
+
+# Type checker / linter caches
+.mypy_cache/
+.ruff_cache/
+.ty_cache/
+
+# Claude
+.claude/
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# QBE / compiled output
+*.ssa.o
+*.out
+a.out
+out/
+qbe_experiments/*.s
+qbe_experiments/0[0-9]_*[^a]

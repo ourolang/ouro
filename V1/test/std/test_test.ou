@@ -1,0 +1,24 @@
+# Smoke-test the test framework itself.  Build a suite, register
+# one passing and one intentionally-failing test, run it, and
+# verify the run() return matches the failure count.
+test = import("std/test")
+
+fn test_addition() -> rc[test.Outcome]:
+    return test.assert_eq_i32(2 + 2, 4, "math broken")
+
+fn test_intentional_fail() -> rc[test.Outcome]:
+    return test.assert_eq_i32(1, 2, "1 != 2 (this is on purpose)")
+
+fn test_strings() -> rc[test.Outcome]:
+    return test.assert_eq_bytes("hello", "hello", "string eq broke")
+
+fn main() -> i32:
+    suite: rc[test.Suite] = test.Suite.new()
+    suite.add("addition", test_addition)
+    suite.add("intentional_fail", test_intentional_fail)
+    suite.add("strings", test_strings)
+    rc_failed = suite.run()
+    # We expect exactly one failure (the intentional one).
+    if rc_failed != 1:
+        return 1
+    return 0

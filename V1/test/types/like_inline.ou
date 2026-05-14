@@ -1,0 +1,14 @@
+# `like[...]` written inline in a fn signature, no alias.  Same
+# implicit-generic lift as the aliased form.
+struct Box:
+    v: i32
+
+fn give(b: like[whatever() -> i32]) -> i32:
+    return 99
+
+fn main() -> i32:
+    b = Box { v: 0 }
+    r = give(b)
+    if r != 99:
+        return 1
+    return 0
